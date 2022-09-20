@@ -14,6 +14,8 @@ format:
     theme: cosmo
     css: styles.css
     toc: true
+    mainfont: 'Work Sans'
+    monofont: 'Cutive Mono'
 
 editor: visual
 
