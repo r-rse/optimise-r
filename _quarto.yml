@@ -3,19 +3,62 @@ project:
 
 website:
   title: "Optimising workflows in R"
+  repo-url: https://github.com/r-rse/optimise-r
+  repo-actions: [edit, issue]
+  page-navigation: true
   navbar:
+    logo: assets/logo/r-rse-logo2.png
+    logo-href: https://www.r-rse.eu/
+    pinned: true
+    search: true
     left:
       - href: index.qmd
         text: Home
       - about.qmd
-
+  page-footer:
+    center:
+      - text: "About"
+        href: about.qmd
+  sidebar:
+    style: "docked"
+    search: true
+    background: "#0BA3A5"
+    foreground: white
+    contents:
+      - section: "Introduction"
+        contents:
+          - 02_intro.qmd
+      - section: "Tools"
+        contents:
+          - 03a_system.qmd
+          - 03b_benchmarking.qmd
+          - 03c_profiling.qmd
+      - section: "Best Practice"
+        contents:
+          - 04_efficient-code.qmd
+      - section: "Working with Data"
+        contents:
+          - 05a_in-mem-data.qmd
+          - 05b_big-data.qmd
+      - section: "Parallelisation"
+        contents:
+          - 06_parallel.qmd
+      - section: "Programmer efficency"
+        contents:
+          - 07_programmer-efficiency.qmd
 format:
   html:
-    theme: cosmo
-    css: styles.css
+    theme:
+      - cosmo
+      - styles.scss
     toc: true
     mainfont: 'Work Sans'
-    monofont: 'Cutive Mono'
-
+    code-copy: true
+    code-overflow: wrap
+    code-link: true
+    fig-responsive: true
+    highlight-style: "dracula"
 editor: visual
 
+execute:
+  freeze: true
