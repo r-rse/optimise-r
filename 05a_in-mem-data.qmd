@@ -1,0 +1,684 @@
+---
+title: "Working Efficiently with Data"
+---
+
+## Use appropriate data structures
+
+### Matrix instead of data.frame
+
+```{r}
+set.seed(1)
+rows <- 10000
+cols <- 150
+
+data <- matrix(rnorm(rows * cols, mean = 10), ncol = cols)
+data[sample(seq(rows * cols), size = 1000)] <- 0L
+data <- as.data.frame(data)
+
+
+```
+
+```{r}
+data_mat <- as.matrix(data)
+
+bench::press(
+    fn_name = c("rowSums", "colSums", "sqrt"),
+    {
+        fn <- get(fn_name)
+        bench::mark(
+            df = fn(data),
+            mat = fn(data_mat),
+            check = FALSE
+        )
+    }
+)
+```
+
+### 
+
+### Single vs double precision floating point
+
+Base R numeric types are either "double" which indicates double precision floating points or integer.
+
+Package `float` enables storing numeric values as single precision (aka). Floats have half the precision of double precision data, for a **pretty obvious performance vs accuracy tradeoff**.
+
+A matrix of floats should use about half as much memory as a matrix of doubles:
+
+```{r}
+library(float)
+data_fl_mat <- fl(data_mat)
+
+pryr::object_size(data_mat)
+pryr::object_size(data_fl_mat)
+```
+
+In addition many matrix routines will generally compute about twice as fast on them as well.
+
+```{r}
+bench::press(
+    fn_name = c("rowSums", "colSums", "sqrt"),
+    {
+        fn <- get(fn_name)
+        bench::mark(
+            df = fn(data),
+            mat = fn(data_mat),
+            fl_mat = fn(data_fl_mat),
+            check = FALSE
+        )
+    }
+)
+```
+
+For more details on the routines available, consult the [`float` pkg documentation](https://cran.r-project.org/web/packages/float/readme/README.html).
+
+**A note of caution:** The results of matrix routines on float data will not be as accurate, and are much more prone to roundoff error/mass cancellation issues. If your data is [well-conditioned](https://en.wikipedia.org/wiki/Condition_number), then using floats is "probably" fine for many applications. They can be an invaluable approach to consider when working with data that cannot but must fit into memory as double.
+
+## 
+
+```{r}
+#| message: false
+
+library(dplyr)
+
+```
+
+## Manipulating
+
+### Matrices & vectors where possible
+
+### Indexing
+
+## Avoid unnecessary pipes
+
+```{r}
+
+```
+
+## 
+
+```{r}
+library(dplyr)
+letter_list <- setNames(letters, LETTERS) |>
+    as.list()
+
+bench::mark(
+    magrittr_pipe = {
+        letter_list %>%
+        purrr::pluck("D")
+    },
+    base_r_pipe = {
+        letter_list |>
+        purrr::pluck("D")
+    },
+    purrr_no_pipe = {
+        purrr::pluck(letter_list, "D") 
+    },
+    base_dollar_idx ={
+        letter_list$D
+    },
+    base_chr_idx ={
+        letter_list[["D"]]
+    },
+    base_int_idx ={
+        letter_list[[4]]
+    },
+    relative = TRUE
+)
+```
+
+# Efficient Data munging
+
+Let's now turn to some of the most common types of data munging and do so, we'll compare and contract a few of the most well known packages in use today.
+
+#### `dplyr` 
+
+##### PROs
+
+-   well integrated collection of functions for data munging
+
+-   easy to read and interpret code even as a beginner
+
+-   reasoning about operations made easier by the use of pipes as well as doing away with the need for intermediate objects
+
+##### **CONs**
+
+-   quite verbose and code can end end up running across many lines
+
+-   can be (comparatively) slow
+
+```{r}
+library(dplyr)
+mtcars %>% 
+    filter(wt < 5) %>% 
+    mutate(l100k = 235.21 / mpg) %>% # liters / 100 km
+    group_by(cyl) %>% 
+    summarise(l100k = mean(l100k))
+```
+
+#### `data.table`
+
+Provides a high-performance version of [base R](https://www.r-project.org/about.html)'s `data.frame` with syntax and feature enhancements for ease of use, convenience and programming speed. It has it's own compact syntax that feels like a blend of base R and some dplyr concepts (e.g. the `by` argument for grouping operations by syntax.
+
+At it's most basic, data.table syntax can be summarised as
+
+>     DT[i, j, by]
+
+where `i` is used for filtering or reordering rows, `j` is used for manipulating and selecting columns and `by` is used for grouping operations.
+
+Instead of piping `data.table` uses the concept of chaining, where subsequent expressions are performed creating a chain of operations through the construct `DT[...][...][...] etc`.
+
+##### PROs
+
+-   syntax is very compact
+
+-   generally faster for many operation, especially as the sizes of datasets grow
+
+-   operations that modify data in place improve memory efficiency and can also boost performance
+
+-   extremely fast functionality for reading in data through function `fread`.
+
+##### **CONs**
+
+-   Syntax can be confusing to understand and work with without familiarity with the package especially when chaining multiple operations
+
+```{r}
+library(data.table)
+mtcars_dt <- as.data.table(mtcars)
+mtcars_dt[wt < 5][, `:=`(l100k = 235.21/mpg)][, .(l100k = mean(l100k)), 
+    keyby = .(cyl)]
+```
+
+#### `dtplyr` 
+
+dtplyr provides a [data.table](http://r-datatable.com/) backend for dplyr. The goal of dtplyr is to allow you to write dplyr code that is automatically translated to the equivalent, but usually much faster, data.table code. The current implementation focuses on lazy evaluation triggered by use of [`lazy_dt()`](https://dtplyr.tidyverse.org/reference/lazy_dt.html). This means that **no computation is performed until you explicitly request it with [`as.data.table()`](https://rdatatable.gitlab.io/data.table/reference/as.data.table.html), [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) or [`as_tibble()`](https://tibble.tidyverse.org/reference/as_tibble.html).**
+
+PROs
+
+-   provides ability to write dplyr code with often improved performance.
+
+-   can be useful for learning how to translate `dplyr` code to `data.table` code
+
+##### **CONs**
+
+-   does not reach the performance of data.table and some operations can end up even slower than
+
+##### Example
+
+First a `lazy_dt` needs to be created with `lazy_dt().` You can then use most dplyr functions as normal. Executing the code shows the `data.table` translation at the top section in `Call:`. This can be really useful for trying to learn `dplyr` syntax.
+
+```{r}
+library(dtplyr)
+mtcars2 <- lazy_dt(mtcars)
+mtcars2 %>% 
+    filter(wt < 5) %>% 
+    mutate(l100k = 235.21 / mpg) %>% # liters / 100 km
+    group_by(cyl) %>% 
+    summarise(l100k = mean(l100k))
+```
+
+The results of executing the above code cannot be accessed until one of `as.data.table()/as.data.frame()/as_tibble()` or even `collect()` is called at the end.
+
+```{r}
+mtcars2 %>% 
+    filter(wt < 5) %>% 
+    mutate(l100k = 235.21 / mpg) %>% # liters / 100 km
+    group_by(cyl) %>% 
+    summarise(l100k = mean(l100k)) %>%
+    as_tibble()
+```
+
+## Benchmarking data munging operations
+
+In this section we'll use the synthetic datasets created for this course. If you have
+
+```{r}
+data_df <- arrow::read_parquet("data/synthpop_10000000.parquet")
+
+```
+
+```{r}
+skimr::skim(data_df)
+```
+
+```{r}
+data_dt <- as.data.table(data_df)
+data_dtp <- dtplyr::lazy_dt(data_dt)
+```
+
+```{r}
+
+bench::mark(
+    dtplyr = {
+        mtcars2 %>% 
+  filter(wt < 5) %>% 
+  mutate(l100k = 235.21 / mpg) %>% # liters / 100 km
+  group_by(cyl) %>% 
+  summarise(l100k = mean(l100k)) %>%
+            collect()
+    },
+  dplyr = {
+      mtcars %>% 
+  filter(wt < 5) %>% 
+  mutate(l100k = 235.21 / mpg) %>% # liters / 100 km
+  group_by(cyl) %>% 
+  summarise(l100k = mean(l100k))
+  }
+)
+```
+
+### Subsetting
+
+```{r}
+
+bench::mark(
+  "Base R" = {
+    data_df[!is.na(data_df$income) & data_df$age > 30, 
+            c("age", "marital", "income", "sport")]
+  },
+  "dplyr" = {
+    dplyr::filter(data_df, 
+                  !is.na(income) & age > 30) %>%
+          dplyr::select(age, marital, income, sport)
+  },
+  "dtplyr" = {
+    dplyr::filter(data_dtp, 
+                  !is.na(income) & age > 30) %>%
+          dplyr::select(age, marital, income, sport) %>%
+          as_tibble()
+  },
+  "data.table" = {
+    data_dt[!is.na(income) & age > 30, 
+            .(age, marital, income, sport)]
+  },
+  check = FALSE)
+
+```
+
+### Ordering
+
+```{r}
+
+
+bench::mark(
+  "Base R" = {
+    data_df[base::order(data_df$income),]
+  },
+  "dplyr" = {
+    dplyr::arrange(data_df, income)
+  },
+  
+  "dtplyr" = {
+    dplyr::arrange(data_dtp, income) %>%
+          dplyr::as_tibble()
+  },
+  "data.table 1" = {
+    data.table::setorder(data_dt, income)
+  },
+  "data.table 2" = {
+    data.table::setorder(copy(data_dt), income)
+  },
+  check = FALSE)
+
+```
+
+### Mutating
+
+```{r}
+bench::mark(
+  "Base R" = {
+    data_df$rel_income <- data_df$income/mean(data_df$income, na.rm = TRUE)
+  },
+  "dplyr" = {
+    data_df <- dplyr::mutate(data_df, rel_income = income/mean(income, na.rm = TRUE))
+  },
+  "dtplyr" = {
+    dplyr::mutate(data_dtp, rel_income = income/mean(income, na.rm = TRUE)) %>%
+          as_tibble()
+  },
+  "data.table" = {
+    data_dt[, rel_income := income/mean(income, na.rm = TRUE)]
+  },
+  check = FALSE)
+```
+
+Let's reset the `data_dt`.
+
+```{r}
+data_dt <- as.data.table(data_df)
+```
+
+### More complex examples
+
+```{r}
+bench::mark(
+    dplyr = {
+        filter(data_df,
+               age > 50L & age < 60L, 
+               income < 300) %>%
+            select(bmi, age, income, nociga, sex) %>%
+            arrange(bmi, age, income, nociga, sex)
+    },
+    dtplyr = {
+        filter(data_dtp,
+               age > 50L & age < 60L, 
+               income < 300) %>%
+            select(bmi, age, income, nociga, sex) %>%
+            arrange(bmi, age, income, nociga, sex) %>%
+            as_tibble()
+        },
+    data.table = {
+        data_dt[age > 50L & age < 60L & income < 300, 
+                .(bmi, age, income, nociga, sex)][
+                    order(bmi, age, income, nociga, sex)
+                    ]
+    },
+    iterations = 5,
+    check = FALSE
+)
+
+```
+
+```{r}
+bench::mark(
+        dplyr = {
+            filter(data_df,
+                   age > 65L,
+                   sex == "MALE",
+                   sport == TRUE,
+                   !is.na(income),
+                   !is.na(marital)) %>%
+                group_by(marital) %>%
+                summarise(min_income = min(income),
+                          max_income = max(income),
+                          mean_income = mean(income))
+    },
+    dtplyr = {
+            filter(data_dtp,
+                   age > 65L,
+                   sex == "MALE",
+                   sport == TRUE,
+                   !is.na(income),
+                   !is.na(marital)) %>%
+                group_by(marital) %>%
+                summarise(min_income = min(income),
+                          max_income = max(income),
+                          mean_income = mean(income)) %>%
+            as_tibble()
+    },
+    data.table = {
+        data_dt[ age > 65L &
+                   sex == "MALE" &
+                   sport == TRUE &
+                   !is.na(income) &
+                   !is.na(marital), 
+                  .(min_income = min(income),
+                          max_income = max(income),
+                          mean_income = mean(income)),
+                 keyby = .(marital)]
+        },
+    iterations = 5,
+    check = FALSE
+)
+```
+
+```{r}
+bench::mark(
+    dplyr = {
+        filter(data_df, !is.na(income)) %>%
+            mutate(income_group = cut(income,
+                                      breaks = seq(0, 16000, by = 1000),
+                                      include.lowest = T,
+                                      right = F)
+                   
+            ) %>%
+            group_by(income_group) %>%
+            summarise(nociga_mean = mean(nociga, na.rm = TRUE))
+    },
+    dtplyr = {
+        filter(data_dtp, !is.na(income)) %>%
+            mutate(income_group = cut(income,
+                                      breaks = seq(0, 16000, by = 1000),
+                                      include.lowest = T,
+                                      right = F)
+                   
+            ) %>%
+            group_by(income_group) %>%
+            summarise(nociga_mean = mean(nociga, na.rm = TRUE)) %>%
+            as_tibble()
+    },
+    data.table = {
+        data_dt[!is.na(income)][, 
+                                `:=`(income_group = cut(income, 
+                                                        breaks = seq(0, 16000, by = 1000),
+                                                        include.lowest = TRUE, 
+                                                        right = FALSE)
+                                )][, .(nociga_mean = mean(nociga, na.rm = TRUE))]
+    },
+    iterations = 5,
+    check = FALSE
+)
+```
+
+```{r}
+bench::mark(
+    dplyr = {
+        filter(data_df, 
+               age < 30) %>%
+            group_by(location) %>%
+            summarise(nociga_mean = mean(nociga, na.rm = TRUE),
+                      prop_smoke = sum(smoke)/n())
+    },
+    dtplyr = {
+        filter(data_dtp, 
+               age < 30) %>%
+            group_by(location) %>%
+            summarise(nociga_mean = mean(nociga, na.rm = TRUE),
+                      prop_smoke = sum(smoke)/n()) %>%
+            as_tibble()
+    },
+    data.table = {
+        data_dt[age < 30][, .(nociga_mean = mean(nociga, na.rm = TRUE), 
+                              prop_smoke = sum(smoke)/.N), keyby = .(location)]
+    },
+    iterations = 5,
+    check = FALSE
+)
+
+
+
+bench::mark(
+    dplyr = {
+        filter(data_df, 
+               age < 30) %>%
+            group_by(marital) %>%
+            summarise(nociga_mean = mean(nociga, na.rm = TRUE),
+                      prop_smoke = sum(smoke)/n())
+    },
+    dtplyr = {
+        filter(data_dtp, 
+               age < 30) %>%
+            group_by(marital) %>%
+            summarise(nociga_mean = mean(nociga, na.rm = TRUE),
+                      prop_smoke = sum(smoke)/n()) %>%
+            as_tibble()
+    },
+    data.table = {
+        data_dt[age < 30][, .(nociga_mean = mean(nociga, na.rm = TRUE), 
+                              prop_smoke = sum(smoke)/.N), keyby = .(location)]
+    },
+    iterations = 5,
+    check = FALSE
+)
+```
+
+## Reading / writing
+
+### File types
+
+### Flat files
+
+Some of the most common file types we might be working with
+
+### Binary files
+
+-   `RData`
+-   parquet/arrow: `arrow` is software development platform for building high performance applications that process and transport large data sets.
+-   `fst/qs`
+
+```{r}
+write_dataset <- function(data, format = c("csv", "csv_readr", "csv_dt", "csv_arrow",
+                                           "parquet", "feather", "rdata", "rds", "fst", "qs"),
+                          out_dir = here::here("data", "write"),
+                          file_name = "synth_pop_100000_") {
+    
+    
+    switch (format,
+            csv = write.csv(data, 
+                            file = fs::path(out_dir, 
+                                            paste0(file_name, format), 
+                                            ext = "csv")),
+            csv_readr = readr::write_csv(data, 
+                                         file = fs::path(
+                                             out_dir, 
+                                             paste0(file_name, format), 
+                                             ext = "csv")),
+            csv_dt = data.table::fwrite(data, 
+                                        file = fs::path(
+                                            out_dir, 
+                                            paste0(file_name, format), 
+                                            ext = "csv")),
+            csv_arrow = arrow::write_csv_arrow(data, 
+                                               file = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "csv")),
+            parquet = arrow::write_parquet(data, sink = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "parquet")),
+            feather = arrow::write_feather(data, sink = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "arrow")),
+            rdata = save(data, file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "RData")),
+            rds = saveRDS(data, file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "rds")),
+            fst = fst::write_fst(data, path = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "fst")),
+            qs = qs::qsave(data, file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "qs"))
+            
+            
+    )
+}
+```
+
+```{r}
+
+out_dir <- here::here("data", "write")
+fs::dir_create(out_dir)
+
+
+bm <- bench::press(
+    format = c("csv", "csv_readr", "csv_dt", "csv_arrow",
+            "parquet", "feather", "rdata", "rds", "fst", "qs"),
+    {
+    bench::mark(
+        write_dataset(data, format = format),
+        relative = FALSE)
+    }
+)
+
+print_bm <- function(benchmark) {
+    benchmark[, c("result", "memory", "time", "gc")] <- NULL
+    benchmark |>
+        dplyr::arrange(median) |>
+        gt::gt()
+}
+
+print_bm(bm)
+
+
+```
+
+```{r}
+
+read_dataset <- function(data, format = c("csv", "csv_readr", "csv_dt", "csv_arrow",
+                                           "parquet", "feather", "rdata", "rds", "fst", "qs"),
+                          out_dir = here::here("data", "write"),
+                          file_name = "synth_pop_100000_") {
+    
+    
+    switch (format,
+            csv = read.csv(file = fs::path(out_dir, 
+                                            paste0(file_name, format), 
+                                            ext = "csv")),
+            csv_readr = readr::read_csv(file = fs::path(
+                                             out_dir, 
+                                             paste0(file_name, format), 
+                                             ext = "csv")),
+            csv_dt = data.table::fread(file = fs::path(
+                                            out_dir, 
+                                            paste0(file_name, format), 
+                                            ext = "csv")),
+            csv_arrow = arrow::read_csv_arrow(file = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "csv")),
+            parquet = arrow::read_parquet(file = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "parquet")),
+            feather = arrow::read_feather(file = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "arrow")),
+            rdata = load(file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "RData")),
+            rds = readRDS(file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "rds")),
+            fst = fst::read_fst(path = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "fst")),
+            qs = qs::qload(file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "qs"))
+            
+            
+    )
+}
+```
+
+```{r}
+#| echo: true
+tibble::tibble(file = basename(fs::dir_ls(out_dir)),
+               size = file.size(fs::dir_ls(out_dir))) |>
+    arrange(size) |>
+        mutate(size = gdata::humanReadable(size,
+                                           standard="SI",
+                                           digits=1)) |>
+    gt::gt()
+
+```
+
+```{r}
+#| message: false
+bm <- bench::press(
+    format = c("csv", "csv_readr", "csv_dt", "csv_arrow",
+            "parquet", "feather", "rdata", "rds", "fst", "qs"),
+    {
+    bench::mark(
+        read_dataset(data, format = format),
+        relative = FALSE)
+    }
+)
+
+print_bm(bm)
+```
