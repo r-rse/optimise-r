@@ -1,0 +1,166 @@
+---
+title: "Knowing your system"
+---
+
+### System Characteristics
+
+Understanding the system code will be run on is an important step to developing and running R code efficiently.
+
+There are a number of ways to explore your system from within R.
+
+#### `sessionInfo`
+
+The easiest place to start would be with function `sessionInfo()` which prints version information about **R**, the OS and attached or loaded packages.
+
+Here's the output of `sessionInfo()` on my laptop:
+
+```{r session-info, eval=FALSE}
+sessionInfo()
+```
+
+    R version 4.2.1 (2022-06-23)
+    Platform: aarch64-apple-darwin21.6.0 (64-bit)
+    Running under: macOS Monterey 12.3.1
+
+    Matrix products: default
+    BLAS:   /opt/homebrew/Cellar/openblas/0.3.21/lib/libopenblasp-r0.3.21.dylib
+    LAPACK: /opt/homebrew/Cellar/r/4.2.1_4/lib/R/lib/libRlapack.dylib
+
+    locale:
+    [1] en_GB.UTF-8/en_GB.UTF-8/en_GB.UTF-8/C/en_GB.UTF-8/en_GB.UTF-8
+
+    attached base packages:
+    [1] stats     graphics  grDevices datasets  utils     methods   base     
+
+    loaded via a namespace (and not attached):
+    [1] compiler_4.2.1 tools_4.2.1    renv_0.15.5   
+
+Apart from information about packages loaded in the current R session, the function also prints some software information including like the Platform and OS version, the Linear Libraries R is using and locale.
+
+Note that `sessionInfo()` displays information about the **software** environment in your current R session.
+
+But the hardware R is running on is also important to assessing what performance you might be able to achieve and the strategies you might consider to achieve better performance.
+
+## `benchmarkme` 📦
+
+`benchmarkme` is a nifty R package you can use to both access information about both hardware and software available to R on your system as well as functionality to benchmark your system using benchmarks for numerical operations as well as for benchmarking I/O.
+
+Let's use the library to first explore our system.
+
+```{r load-benchmarkme}
+library(benchmarkme)
+```
+
+The package contains a suite of functions for accessing information about your systems hardware and software relevant to R.
+
+-   RAM: `get_ram()`
+
+-   CPUs: `get_cpu()`
+
+-   BLAS library: `get_linear_algebra()`
+
+-   Is byte compiling enabled: `get_byte_compiler()`
+
+-   General platform info: `get_platform_info()`
+
+-   R version: `get_r_version()`
+
+```{r run-sys-characteristics}
+get_ram()
+get_cpu()
+get_linear_algebra()
+get_byte_compiler()
+get_platform_info()
+get_r_version()
+```
+
+Note that the BLAS linear library shown here is **libRblas** whereas the previous output which I got by running session info through R in the terminal showed that R was using **openblas**. This is a consequence of running R through RStudio on M1 Macs and will hopefully be rectified at some point.
+
+## Monitoring your system
+
+All operating systems have dedicated system activity monitors, available through a GUI or through the terminal.
+
+### GUIs
+
+Let's explore what's currently going on on our systems through our OS's dedicated GUI.
+
+Depending on your OS,
+
+-   **macOS:** Activity Monitor
+
+-   **Windows:** Task Manager (\[How to Open Task Manager in Windows 10\](https://www.freecodecamp.org/news/how-to-open-task-manager-in-windows-10/))
+
+-   **Linux:** GNOME System Monitor
+
+Here's what Activity Monitor looks like on my Mac.
+
+::: panel-tabset
+## CPU
+
+![](assets/images/am-cpu.png){fig-align="center" width="1000"}
+
+## Memory
+
+![](assets/images/am-memory.png){fig-align="center" width="1000"}
+
+## Disk
+
+![](assets/images/am-disk.png){fig-align="center" width="1000"}
+
+## Network
+
+![](assets/images/am-network.png){fig-align="center" width="1000"}
+:::
+
+CPU, Memory, Disk and Network monitoring is split across tabs but your monitor might show everything in the same tab across different graphs. Some terminology and information shown might differ but ultimately, all monitors attempt to show an overview of similar system activity.
+
+Each row in the monitor table of activities represents a process, each process having its own PID (process ID). They are all controlled by the kernel. As new processes are initiated (for example when we open a new application), the kernel creates a new process for it. If there are multiple cores available on your system, the kernel will allocate new processes to inactive cores. When more processes than cores are running, the kernel uses context switching to keep multiple processes running on a single core.
+
+### Terminal
+
+#### `top`
+
+On macOS and Linux distributions, the `top` command can also be run in the terminal which initiates system monitoring in the terminal. `top` shows a summary of system activity as well as periodically displaying a list of processes on the system in sorted order. The default key for sorting is pid, but other keys can be used instead.
+
+![](assets/images/top-screenshot.png){width="1000"}
+
+#### Example of Activity monitoring when running R
+
+Let's run the following matrix multiplication code on our system and observe what happens on our system monitor.
+
+```{r run-top-compute}
+n <- 4*1024
+A <- matrix( rnorm(n*n), ncol=n, nrow=n )
+B <- matrix( rnorm(n*n), ncol=n, nrow=n )
+C <- A %*% B
+```
+
+This is what happens when monitoring through `top`. The rsession process moves to the top and, running in a single thread, uses \~100% of the available CPU while running. When finished, the process drops from the top and goes back to using just 0.2% of CPU as R waits for our next command.
+
+![](assets/images/top.gif)
+
+## Benchmarking your system
+
+As afforementioned, the **`benchmarkme`** package provides a set of benchmarks to help quantify your system. More interestingly, it allows you to compare your timings with timings crowdsourced on *other* systems.
+
+There are two groups of benchmarks:
+
+-   `benchmark_std()`: this benchmarks numerical operations such as loops and matrix operations. The benchmark comprises of three separate benchmarks: `prog`, `matrix_fun`, and `matrix_cal`.
+
+-   `benchmark_io()`: this benchmarks reading and writing a 5 / 50, MB csv file.\
+
+You can compare your results to other users by assigning the output of the benchmarking to a variable and plotting it.
+
+```{r run-std-benchmark}
+std_bm <- benchmark_std()
+
+plot(std_bm)
+```
+
+```{r run-io-benchmark}
+io_bm <- benchmark_io()
+
+plot(io_bm)
+```
+
+All in all my system seems comparatively fast! M1 chips have indeed been shown to be generally very performant. Having said that I seriously doubt I have the most powerful system out there and it's likely that the timings it's being compared to are somewhat out of date.
