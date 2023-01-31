@@ -1,0 +1,128 @@
+---
+title: "Introduction"
+format:
+  revealjs: 
+    theme: [default, reveal.scss]
+editor: visual
+preload-iframes: true
+---
+
+## Welcome
+
+## Objectives
+
+#  {background-image="https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/1cc5e3ff-37e5-4b9c-abf4-92304fafa4c9/deekqx1-20d6363f-185e-4f8d-a748-f5b3f3b8fdde.gif?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7InBhdGgiOiJcL2ZcLzFjYzVlM2ZmLTM3ZTUtNGI5Yy1hYmY0LTkyMzA0ZmFmYTRjOVwvZGVla3F4MS0yMGQ2MzYzZi0xODVlLTRmOGQtYTc0OC1mNWIzZjNiOGZkZGUuZ2lmIn1dXSwiYXVkIjpbInVybjpzZXJ2aWNlOmZpbGUuZG93bmxvYWQiXX0.bQwR0OGahVNiMtiHhvn95SFiuAZKxapsWSr_AbMK_Oc"}
+
+::: {style="background-color: #ffffffbb; border-radius: 10px; padding: 5px;"}
+::: r-fit-text
+Computation
+:::
+:::
+
+::: fragment
+[![Transistor icons created by surang - Flaticon](assets/images/transistor.png){fig-alt="transistor icon" fig-align="center"}](https://www.flaticon.com/free-icons/transistor)
+:::
+
+```{r}
+intToBits(10L)
+```
+
+::: notes
+Computers represent info using binary code in the form of digital 1s and 0s inside the central processing unit ([CPU](https://www.techtarget.com/whatis/definition/processor)) and RAM. These digital numbers are electrical signals that are either on or off inside the CPU or [RAM](https://www.techtarget.com/searchstorage/definition/RAM-random-access-memory).
+
+Each transistor is a switch, that is, **0** when turned off and **1** when turned on. The more transistors, the more switches.
+
+Transistors are the basic building blocks that regulate the operation of computers, mobile phones, and all other modern electronic circuits and is the basic unit of the CPU
+:::
+
+## Computer Hardware
+
+::: columns
+::: {.column width="33%"}
+#### CPU (Processing)
+
+![](assets/images/cpu.png){fig-align="center"}
+:::
+
+::: {.column width="33%"}
+#### RAM (memory)
+
+![](assets/images/ram-memory.png){fig-align="center"}
+:::
+
+::: {.column width="33%"}
+#### I/O
+
+![](assets/images/hdd.png){fig-align="center" width="300"} ![](assets/images/networking.png){fig-align="center" width="300"}
+:::
+:::
+
+::: notes
+### CPU
+
+-   The central processing unit (CPU), or the processor, is the brains of a computer. The CPU is responsible for performing numerical calculations.
+
+<!-- -->
+
+-   The faster the processor, the faster R will run.
+
+-   The clock speed (or clock rate, measured in hertz) is the frequency with which the CPU executes instructions. The faster the clock speed, the more instructions a CPU can execute in a section.
+
+RAM
+
+-   Random access memory (RAM) is a type of computer memory that can be accessed randomly: any byte of memory can be accessed without touching the preceding bytes.
+
+-   The amount of RAM R has access to is incredibly important. Since R loads objects into RAM, the amount of RAM you have available can limit the size of data set you can analyse. MEMORY BOUND
+
+<!-- -->
+
+    Even if the original data set is relatively small, your analysis can generate large objects
+:::
+
+## Moore's law
+
+<iframe src="https://ourworldindata.org/grapher/transistors-per-microprocessor" loading="lazy" style="width: 100%; height: 600px; border: 0px none;">
+
+</iframe>
+
+::: notes
+When the price is unchanged, the number of components that can be accommodated on the integrated circuit will **double every 18-24 months**, and the performance will double. In other words, the performance of a computer that can be bought for every dollar will more than double every 18-24 months
+:::
+
+## Yet...
+
+### we've hit clock speed stagnation
+
+[![50 Years of Processor Trends. Distributed by Karl Rupp under a CC-BY 4.0 License](assets/images/50-years-processor-trend.png){fig-align="center"}](https://github.com/karlrupp/microprocessor-trend-data)
+
+## 
+
+# About R
+
+## R is an interpreted language
+
+::: columns
+::: {.column width="50%"}
+**Compiled language**
+
+Converted directly into machine code that the processor can execute.
+
+-   Tend to be faster and more efficient to execute.
+
+-   Need a "build" step which builds for system they are run on
+
+-   **Examples:** C, C++, Erlang, Haskell, Rust, and Go
+:::
+
+::: {.column width="50%"}
+#### **Interpreted Languages**
+
+Code interpreted line by line during run time.
+
+-   significantly slower although [just-in-time compilation](https://guide.freecodecamp.org/computer-science/just-in-time-compilation) is closing that gap.
+
+-   much more expressive and flexible
+
+-   \*\*Examples: R\*\*, Ruby, Python, and JavaScript.
+:::
+:::
