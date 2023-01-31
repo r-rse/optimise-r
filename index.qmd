@@ -17,7 +17,3 @@ In this course you will learn about:
 -   Parallelising workflows
 
 -   Linking to optimised Math libraries
-
-```{r}
-1 + 3
-```
