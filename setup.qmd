@@ -1,0 +1,50 @@
+---
+title: "setup"
+---
+
+## Install a recent R version
+
+You can download the latest version of R from <https://www.r-project.org/>. Ideally you should have an R version \> 4.0.0. Otherwise you might experience issues with using/installing some of the packages needed.
+
+## Install RStudio
+
+Install Rstudio desktop from <https://posit.co/download/rstudio-desktop/>
+
+## Install R dependencies
+
+Use the following code to install the packages we will be working with in one go.
+
+```{r}
+#| eval: false
+pkgs <- c(
+    "benchmarkme",
+    "tictoc",
+    "microbenchmark",
+    "bench",
+    "pryr",
+    "lobstr",
+    "DBI",
+    "arrow",
+    "readr",
+    "data.table",
+    "fst",
+    "qs",
+    "vroom",
+    "RSQLite",
+    "duckdb",
+    "fs",
+    "float",
+    "dplyr",
+    "dbplyr",
+    "dtplyr",
+    "biglm",
+    "collapse"
+    
+)
+
+install.packages(pkgs)
+```
+
+If you are having problems installing the `arrow` package, have a look at the [package installation instructions](The%20arrow%20R%20package).
+
+## 
