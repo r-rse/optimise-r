@@ -1,0 +1,444 @@
+---
+title: "Benchmarking"
+---
+
+Benchmarking effectively refers to timing execution of our code, although aspects of memory utilisation can also be compared during benchmarking.
+
+There are many ways to benchmark code in R and here we'll review some of the most useful ones.
+
+## Simple benchmarking
+
+### `system.time()`
+
+The function takes an expression and returns the CPU time used to evaluate the expression. It is a primitive function and part of base R an a good starting point for timing R expressions.
+
+```{r}
+system.time(
+    for(i in 1:100) mad(runif(1000))
+    )
+```
+
+The output prints a named vector of length 3.
+
+The first two entries are the **total user** and **system CPU** times of *the current **R** process and any child processes* on which it has waited, and the third entry is the **'real' elapsed time** since the process was started.
+
+The resolution of the times will be system-specific.
+
+Expressions across multiple lines can be run by enclosing them in curly braces (`{}`).
+
+```{r}
+system.time({
+    for(i in 1:100) {
+        v <- runif(1000)
+        mad(v)
+    }
+})
+```
+
+### `tictoc` 📦
+
+Package `tictoc` provides similar functionality to `system.time` with some additional useful features. To time code execution, you can wrap them between function calls `tic` and `toc`.
+
+```{r}
+library(tictoc)
+
+tic()
+
+for (i in 1:100) {
+    v <- runif(1000)
+    mad(v)
+}
+
+toc()
+```
+
+The nice features of the `tictoc` package is that;
+
+-   Descriptive messages can be associated with each timing through `tic` argument `msg`.
+
+-   Timings can be nested.
+
+-   Timings can be logged through `toc` argument `log = TRUE` and accessed afterwards through `tic.log()`.
+
+```{r}
+tic(msg = "MAD 100 iterations of 1000 random values")
+
+for (i in 1:100) {
+    v <- runif(1000)
+    mad(v)
+}
+
+toc(log = TRUE)
+
+tic(msg = "MAD 1000 iterations of 1000 random values")
+
+for (i in 1:1000) {
+    v <- runif(1000)
+    mad(v)
+}
+
+toc(log = TRUE)
+
+tic(msg = "MAD 100 iterations of 10000 random values")
+
+for (i in 1:100) {
+    v <- runif(10000)
+    mad(v)
+}
+
+toc(log = TRUE)
+
+tic.log()
+```
+
+## Formal Benchmarking
+
+`system.time()` and `tictoc` are straightforward and simple to use for timing individual of code. However, there do have a few limitations:
+
+-   They only time execution time of the code once. As we've seen there's a lot of other things going on on your system which may affect execution time at any one time. So timings can vary if tested repeatedly.
+
+-   Comparing different expressions has to be performed rather manually, especially if we want to also check expressions being compared give the same result.
+
+There are a number of packages in R that make benchmarking code, especially the comparison of different expressions much easier and robust. Here we will explore two of these, `microbenchmark` and `bench`.
+
+### `microbenchmark` 📦
+
+The `microbenchmark()` function in package `microbenchmark` serves as a more accurate replacement of `system.time()`. To achieved this, the sub-millisecond (supposedly nanosecond) accurate timing functions most modern operating systems provide are used. This allows us to compare expressions with much shorter execution times.
+
+Some nice package features:
+
+-   By default evaluates each expression multiple times, by default 100 but this number can be controlled through argument `times`.
+
+-   You can enforce checks on the results to ensure each expression tested returns the same result, with various levels of strictness through argument `check`.
+
+-   You can supply setup code that will be run by each iteration without contributing to the timing through argument `setup`.
+
+-   Note that the function is only meant for micro-benchmarking small pieces of source code and to compare their relative performance characteristics.
+
+See the function documentation for more info.
+
+Let's go ahead and look at an example.
+
+#### Centering data in data.frame by column mean
+
+Let's say we are given the following code and asked to speed it up.
+
+In this example, first a data frame is created that has 151 columns. One of the columns contains a character ID, and the other 150 columns contain numeric values.
+
+For each numeric column, the code calculates the mean and subtracts it from the values in the column, so the data in each column is centered on the mean.
+
+```{r}
+#| eval: false
+rows <- 400000
+cols <- 150
+data <- as.data.frame(x = matrix(rnorm(rows * cols, mean = 5), ncol = cols))
+data <- cbind(id = paste0("g", seq_len(rows)), data)
+
+
+data1 <- data   # Store in another variable for this run
+
+# Get column means
+means <- apply(data1[, names(data1) != "id"], 2, mean)
+
+# Subtract mean from each column
+for (i in seq_along(means)) {
+    data1[, names(data1) != "id"][, i] <- data1[, names(data1) != "id"][, i] - means[i]
+}
+
+```
+
+Looking at it, we might think back to the age old R advice to "avoid loops! Vectorise". So to improve performance of our code we might start by working on the for loop.
+
+Let's use benchmark to test a few options and compare it to the original approach:
+
+-   To vectorise, we might consider the `mapply` function, given we want to vectorise across more than one objects (`means` and the data)
+
+```{r}
+
+microbenchmark::microbenchmark(
+    for_loop = {
+        data_ctr <- data
+        for (i in seq_along(means)) {
+            data_ctr[, names(data_ctr) != "id"][, i] <- 
+                data_ctr[, names(data_ctr) != "id"][, i] - means[i]
+        }
+    }, 
+    mapply = {
+        data_ctr <- data
+        data_ctr[, names(data_ctr) != "id"] <- mapply(
+            function(x, y) x - y,
+            data_ctr[, names(data_ctr) != "id"], 
+            means)
+    },
+    lrg_vector = {
+        data_ctr <- data
+        data_ctr[, names(data_ctr) != "id"] <- 
+            data_ctr[, names(data_ctr) != "id"] - rep(means, each = rows)
+    },
+      map2_dfc = {
+        data_ctr <-  cbind(data["id"],
+                        purrr::map2_dfc(
+                            data[, names(data) != "id"], 
+                            means, 
+                            ~.x - .y))
+    },
+    times = 5
+)
+
+
+```
+
+```{r}
+microbenchmark::microbenchmark(
+    for_loop = {
+        data_ctr <- data
+        for (i in seq_along(means)) {
+            data_ctr[, names(data_ctr) != "id"][, i] <- 
+                data_ctr[, names(data_ctr) != "id"][, i] - means[i]
+        }
+    }, 
+    mapply = {
+        data_ctr <- data
+        data_ctr[, names(data_ctr) != "id"] <- mapply(
+            function(x, y) x - y,
+            data_ctr[, names(data_ctr) != "id"], 
+            means)
+    },
+    lrg_vector = {
+        data_ctr <- data
+        data_ctr[, names(data_ctr) != "id"] <- 
+            data_ctr[, names(data_ctr) != "id"] - rep(means, each = times)
+    },
+      map2_dfc = {
+        data_ctr <-  cbind(data["id"],
+                        purrr::map2_dfc(
+                            data[, names(data) != "id"], 
+                            means, 
+                            ~.x - .y))
+    },
+    times = 5,
+    check = "equivalent"
+)
+
+```
+
+```{r}
+mb <- microbenchmark::microbenchmark(
+    for_loop = {
+        data_ctr <- data
+        for (i in seq_along(means)) {
+            data_ctr[, names(data_ctr) != "id"][, i] <- 
+                data_ctr[, names(data_ctr) != "id"][, i] - means[i]
+        }
+        data_ctr
+    }, 
+    mapply = {
+        data_ctr <- data
+        data_ctr[, names(data_ctr) != "id"] <- mapply(
+            function(x, y) x - y,
+            data_ctr[, names(data_ctr) != "id"], 
+            means)
+        data_ctr
+    },
+    lrg_vector = {
+        data_ctr <- data
+        data_ctr[, names(data_ctr) != "id"] <- 
+            data_ctr[, names(data_ctr) != "id"] - rep(means, each = times)
+        data_ctr
+    },
+      map2_dfc = {
+        data_ctr <-  cbind(data["id"],
+                        purrr::map2_dfc(
+                            data[, names(data) != "id"], 
+                            means, 
+                            ~.x - .y))
+        data_ctr
+    },
+    times = 5,
+    check = "equivalent"
+)
+
+mb
+
+autoplot(mb)
+```
+
+```{r}
+
+        data1 <- data
+        for (i in seq_along(means)) {
+            data1[, names(data1) != "id"][, i] <- 
+                data1[, names(data1) != "id"][, i] - means[i]
+        }
+        data1
+
+ 
+        data2 <- data
+        data2[, names(data2) != "id"] <- mapply(
+            function(x, y) x - y,
+            data2[, names(data2) != "id"], 
+            means)
+
+
+        data3 <- data
+        data3[, names(data3) != "id"] <- 
+            data3[, names(data3) != "id"] - rep(means, each = times)
+
+   
+        data4 <-  dplyr::mutate_if(data, is.numeric, 
+                                   ~scale(.x, 
+                                          center = TRUE,
+                                          scale = FALSE)) 
+ 
+        data5 <-  cbind(data["id"],
+                        purrr::map2_dfc(
+                            data[, names(data) != "id"], 
+                            means, 
+                            ~.x - .y))
+        
+        
+        
+        ,
+  
+        
+```
+
+```{r}
+waldo::compare(data1, data2)
+waldo::compare(data1, data3)
+waldo::compare(data3, data4)
+waldo::compare(data1, data5)
+
+
+all.equal(data1, data2)
+all.equal(data1, data3)
+all.equal(data3, data4)
+all.equal(data1, data5)
+
+
+```
+
+```{r}
+microbenchmark::microbenchmark(
+
+    mapply = {
+        data1 <- data
+        data1[, names(data1) != "id"] <- mapply(
+            function(x, y) x - y,
+            data1[, names(data1) != "id"], 
+            means)
+        data1
+    },
+    lrg_vector = {
+        data2 <- data
+        data2[, names(data2) != "id"] <- 
+            data2[, names(data2) != "id"] - rep(means, each = times)
+        data2
+    },
+    times = 5,
+    check = "equivalent"
+)
+
+```
+
+Let's say we wanted to try and impor
+
+### `bench` 📦
+
+```{r}
+bench::mark(
+    for_loop = {
+        data_ctr <- data
+        for (i in seq_along(means)) {
+            data_ctr[, names(data_ctr) != "id"][, i] <- 
+                data_ctr[, names(data_ctr) != "id"][, i] - means[i]
+        }
+        data_ctr
+    }, 
+    mapply = {
+        data_ctr <- data
+        data_ctr[, names(data_ctr) != "id"] <- mapply(
+            function(x, y) x - y,
+            data_ctr[, names(data_ctr) != "id"], 
+            means)
+        data_ctr
+    },
+    lrg_vector = {
+        data_ctr <- data
+        data_ctr[, names(data_ctr) != "id"] <- 
+            data_ctr[, names(data_ctr) != "id"] - rep(means, each = times)
+        data_ctr
+    },
+      map2_dfc = {
+        data_ctr <-  cbind(data["id"],
+                        purrr::map2_dfc(
+                            data[, names(data) != "id"], 
+                            means, 
+                            ~.x - .y))
+        data_ctr
+    },
+    iterations = 5
+)
+```
+
+```{r}
+data_ctr <- data
+        data_ctr[, names(data_ctr) != "id"] <- mapply(
+            function(x, y) x - y,
+            data_ctr[, names(data_ctr) != "id"], 
+            means)
+        data_ctr
+```
+
+```{r}
+bp <- bench::press(
+    rows = c(1000, 10000, 400000),
+    cols = c(15, 75, 150),
+    {
+        {
+            set.seed(1)
+            data <- as.data.frame(x = matrix(rnorm(rows * cols, mean = 5), ncol = cols))
+            data <- cbind(id = paste0("g", seq_len(rows)), data)
+            means <- apply(data[, names(data) != "id"], 2, mean)
+        }
+        bench::mark(
+            for_loop = {
+                data_ctr <- data
+                for (i in seq_along(means)) {
+                    data_ctr[, names(data_ctr) != "id"][, i] <- 
+                        data_ctr[, names(data_ctr) != "id"][, i] - means[i]
+                }
+                data_ctr
+            }, 
+            mapply = {
+                data_ctr <- data
+                data_ctr[, names(data_ctr) != "id"] <- mapply(
+                    function(x, y) x - y,
+                    data_ctr[, names(data_ctr) != "id"], 
+                    means)
+                data_ctr
+            },
+            lrg_vector = {
+                data_ctr <- data
+                data_ctr[, names(data_ctr) != "id"] <- 
+                    data_ctr[, names(data_ctr) != "id"] - rep(means, each = rows)
+                data_ctr
+            },
+            map2_dfc = {
+                data_ctr <-  cbind(data["id"],
+                                   purrr::map2_dfc(
+                                       data[, names(data) != "id"], 
+                                       means, 
+                                       ~.x - .y))
+                data_ctr
+            },
+            iterations = 5,
+            time_unit = "us"
+        )
+    }
+)
+```
+
+```{r}
+ggplot2::autoplot(bp)
+```

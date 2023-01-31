@@ -1,0 +1,159 @@
+---
+title: "Profiling"
+---
+
+```{r}
+library(profvis)
+library(dplyr)
+```
+
+```{r}
+
+
+
+times <- 4e5
+cols <- 150
+data <- as.data.frame(x = matrix(rnorm(times * cols, mean = 5), ncol = cols))
+data <- cbind(id = paste0("g", seq_len(times)), data)
+
+profvis({
+  data1 <- data   # Store in another variable for this run
+
+  # Get column means
+  means <- apply(data1[, names(data1) != "id"], 2, mean)
+
+  # Subtract mean from each column
+  for (i in seq_along(means)) {
+    data1[, names(data1) != "id"][, i] <- data1[, names(data1) != "id"][, i] - means[i]
+  }
+})
+
+```
+
+#### profVis and piping
+
+### `Rprof()`
+
+While
+
+```{r, eval=FALSE}
+prof_file <- tempfile()
+
+x <- runif(1000000, min = 1, max = 100)
+Rprof(prof_file, interval = 0.000001)
+
+y <- ifelse(x < 10, 0, sqrt(x))
+
+Rprof(NULL)
+
+summaryRprof(prof_file)
+
+
+
+Rprof(prof_file, interval = 0.0000001, filter.callframes = TRUE)
+
+y <- cond_sqrt_vctr(x)
+
+Rprof(NULL)
+
+summaryRprof(prof_file)
+
+```
+
+## More on Memory Profiling
+
+https://stat.ethz.ch/R-manual/R-patched/library/base/html/Memory.html
+
+```{r}
+library(pryr)
+
+mem_change(NULL)
+mem_used()
+
+mem_change(x <- 1:1e6)
+tracemem(x)
+
+# Also point to 1:1e6 from y
+mem_change(y <- x)
+
+# Remove x, no memory freed because y is still pointing to it
+mem_change(rm(x))
+#> 472 B
+# Now nothing points to it and the memory can be freed
+mem_change(rm(y))
+
+mem_change(x <- 1:1e6)
+tracemem(x)
+#> 520 B
+# Also point to 1:1e6 from y
+mem_change(y <- x)
+
+mem_change(y[1] <- 1)
+mem_change(y[1] <- 10)
+mem_change(y[1] <- NA)
+#> 584 B
+# Remove x, no memory freed because y is still pointing to it
+mem_change(rm(x))
+#> 472 B
+# Now nothing points to it and the memory can be freed
+mem_change(rm(y))
+mem_change(gc())
+```
+
+```{r}
+x <- 1:1e6
+tracemem(x)
+#> 520 B
+# Also point to 1:1e6 from y
+y <- x
+
+y[1] <- 1
+y[1] <- 10
+y[1] <- NA
+```
+
+### Garbage collection in R
+
+https://stat.ethz.ch/R-manual/R-patched/library/base/html/gc.html
+
+## Memory in RStudio
+
+https://support.posit.co/hc/en-us/articles/1500005616261-Understanding-Memory-Usage-in-the-RStudio-IDE
+
+```{r}
+x <- 10
+lobstr::obj_addr(x)
+```
+
+```{r}
+set.seed(1)
+a <- sample(1:10L, 5)
+```
+
+```{r}
+tracemem(a)
+
+```
+
+```{r}
+a[1] <- 2L
+
+```
+
+```{r}
+a[2] <- 5.5
+```
+
+```{r}
+b <- a
+tracemem(b)
+```
+
+```{r}
+a[3] <- 6.2
+```
+
+```{r}
+a[1] <- 17.0
+b[1] <- 17.0
+```
