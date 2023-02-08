@@ -17,29 +17,32 @@ Use the following code to install the packages we will be working with in one go
 ```{r}
 #| eval: false
 pkgs <- c(
-    "benchmarkme",
-    "tictoc",
-    "microbenchmark",
-    "bench",
-    "pryr",
-    "lobstr",
-    "DBI",
-    "arrow",
-    "readr",
-    "data.table",
-    "fst",
-    "qs",
-    "vroom",
+    "arrow", 
+    "bench", 
+    "benchmarkme", 
+    "biglm", 
+    "data.table", 
+    "DBI", 
+    "dbplyr", 
+    "dplyr", 
+    "dtplyr", 
+    "duckdb", 
+    "float", 
+    "fs", 
+    "fst", 
+    "gt", 
+    "lobstr", 
+    "microbenchmark", 
+    "pryr", 
+    "purrr",
+    "qs", 
+    "readr", 
     "RSQLite",
-    "duckdb",
-    "fs",
-    "float",
-    "dplyr",
-    "dbplyr",
-    "dtplyr",
-    "biglm",
-    "collapse"
-    
+    "skimr",
+    "tibble",
+    "tictoc", 
+    "usethis", 
+    "vroom"
 )
 
 install.packages(pkgs)
@@ -47,4 +50,12 @@ install.packages(pkgs)
 
 If you are having problems installing the `arrow` package, have a look at the [package installation instructions](The%20arrow%20R%20package).
 
-## 
+### Download course materials
+
+The course materials can be found at <https://github.com/r-rse/optimise-r-materials>.
+
+To download the materials you can use `usethis` function `use_course()`. This will download a `zip` file of the repository and unzip it for you. If you do not supply a `destdir` path, as below, it will ask you whether you want it to download it to your `Desktop` by default. If you prefer it to be downloaded to another destination, just supply a path to `destdir`.
+
+```{r}
+usethis::use_course("r-rse/optimise-r-materials")
+```
