@@ -2,142 +2,188 @@
 title: "Best practice for writing efficient code"
 ---
 
-We will look at a lot of examples here that will look as a strange way to do things. It's instructive often to go ahead and benchmark and memory profile such code to make what's going on more concrete.
+We've had a look at ways to benchmark your code and identify bottlenecks. When making optimisation decisions, it's always best to use theses tools to be get hard data on how your code is likely to perform. Having said that, there are some **golden rules** in R programming that can help you write performant code from the start and help guide the search for more efficient solutions when bottlenecks are identified.
+
+In the next few sections, we'll have a look at some key best practices for writing efficient R code. A characteristic of R is that there are **many many** ways to do the same thing. We will look at a lot of examples here that might seem like a strange way to do things, and many are! However, it's often quite instructive to benchmark and memory profile such code to make what's going on more concrete.
+
+Let's start with one of the most pernicious drain on performance which should be avoided at all costs, growing data structures!
 
 ## Avoid growing data structures
 
+Let's start with an example vector `x` of 1000 random numbers between 1 and 100.
+
 ```{r}
+set.seed(20230116)
 x <- runif(10000, min = 1, max = 100)
 ```
 
 Let's say we want to process our vector with a simple algorithm. If the value of `x` is less that 10, recode to 0. Otherwise, take the square root.
 
-The most basic implementation might be to a `for` loop and process each element individually using an `if` statement and storing the output in another vector.
+```{r}
+#| output: false
+library(dplyr)
+library(pryr)
+library(ggplot2)
+```
+
+### The perils of growing data structures
+
+The most basic implementation we might think of is a `for` loop that processes each element individually, using an `if` statement to decide what action to take depending on the value of the element and appending the processed output of each iteration using the `c()` function, element by element, to another vector `y`.
+
+Let's create a function to implement it:
 
 ```{r}
-#| eval: false
-y <- NULL
-for (i in seq_along(x)) {
-    if (x[i] < 10) {
-        y[i] <- 0
-    } else {
-        y[i] <- sqrt(x[i])
+for_loop_c <- function(x) {
+    y <- NULL
+    for (i in seq_along(x)) {
+        if (x[i] < 10) {
+            y <- c(y, 0)
+        } else {
+            y <- c(y, sqrt(x[i]))
+        }
     }
+    y
 }
-y
 ```
 
-Let's go ahead and make a starting benchmark.
+Let's go ahead and make a starting benchmark:
 
 ```{r}
 bench::mark(
-    for_loop = {
-        y <- NULL
-        for (i in seq_along(x)) {
-            if (x[i] < 10) {
-                y[i] <- 0
-            } else {
-                y[i] <- sqrt(x[i])
-            }
-        }
-        y   
-    }
+    for_loop_c(x)
 )
 ```
 
-As we will see this is actually quite slow. What also stands out is the memory allocated to the execution, especially compared to the size of the original vector!
+It might not seem obvious until we start comparing it to other approaches but this is actually very slow for processing a numeric vector of length `r length(x)`. Notice as well how much memory is allocated to the execution, especially compared to the size of the original vector!
 
 ```{r}
-lobstr::obj_size(x)
+object_size(x)
 ```
 
-The biggest problem with this implementation, and the reason for loops are so often maligned for inefficiency is the fact that we are incrementally growing the result vector `y`. Because `y` is modified with every iteration, R has to make a copy of the original `y` vector before it can modify it and this takes up more and more memory as the vector grows.
+The biggest problem with this implementation, and the reason for loops are so often (wrongly) maligned for inefficiency is the fact that we are incrementally growing the result vector `y` using function `c`.
 
-Let's see what happens when we pre-allocate the results vector. And let's try three different versions:
+To dig into the issue let's contrast it to another approach for growing vectors, using sub-assignment.
 
--   a vector of `NA`s the same length as `x` (which defaults to a `logical` vector.
-
--   a vector of `NA_real_`s the same length as `x` . Using `NA_real_` creates a `double` vector.
-
--   a numeric vector the same length as `x` which creates a double vector of zeros.
+In the following example, we're doing the same processing to each element but instead of binding it to `y` using `c()`, we use sub-assignment to increment the length of `y` directly.
 
 ```{r}
-bench::mark(
-    grow_res = {
-        y <- NULL
-        for (i in seq_along(x)) {
-            if (x[i] < 10) {
-                y <- c(y, 0)
-            } else {
-                y <- c(y, sqrt(x[i]))
-            }
-        }
-        y
-    },
-    pre_all_NA = {
-        y <- rep(NA, times = length(x))
-        for (i in seq_along(x)) {
-            if (x[i] < 10) {
-                y[i] <- 0
-            } else {
-                y[i] <- sqrt(x[i])
-            }
-        }
-        y
-    },
-    pre_all_NA_real = {
-        y <- rep(NA_real_, times = length(x))
-        for (i in seq_along(x)) {
-            if (x[i] < 10) {
-                y[i] <- 0
-            } else {
-                y[i] <- sqrt(x[i])
-            }
-        }
-        y
-    },
-    pre_all_dat_type = {
-        y <- numeric(length = length(x))
-        for (i in seq_along(x)) {
-            if (x[i] < 10) {
-                y[i] <- 0
-            } else {
-                y[i] <- sqrt(x[i])
-            }
-        }
-        y
-    }
-)
-
-
-```
-
-We can see a huge improvement in performance if we pre-allocate `y` to the appropriate and this is also reflected in the huge drop in memory allocation for the operation. Now R is making copies at every iteration but rather modifying `y` in place.
-
-We also see minor speed up by preallocating the appropriate type of vector. This means R doesn't have to coerce the vector to the appropriate type in the first iteration.
-
-## Vectorise where possible
-
-```{r}
-
-bench::mark(
-    pre_all_dat_type = {
-        y <- numeric(length = length(x))
-        for (i in seq_along(x)) {
+for_loop_assign <- function(x) {
+    y <- NULL
+    for (i in seq_along(x)) {
+        if (x[i] < 10) {
+            y[i] <- 0
+        } else {
             y[i] <- sqrt(x[i])
         }
-        y
-    },
-    unlist(lapply(x, sqrt)), 
-    sapply(x, sqrt),
-    purrr::map(x, sqrt)
+    }
+    y
+}
+```
+
+Let's compare the two approaches with a benchmark.
+
+```{r}
+bench::mark(
+    for_loop_c(x),
+    for_loop_assign(x)
 )
 ```
 
-```{r}
+That's a big difference! We're still growing the vector element by element in `for_loop_assign`, but it's much faster than using the `c()` function. It's also much more memory efficient! Why?
 
-cond_sqrt_fl <- function(x) {
-    y <- numeric(length = length(x))
+Well, to get to the bottom of this, I actually ended up posting a [question on stack overflow](https://stackoverflow.com/questions/75321441/performance-difference-between-growing-vectors-using-c-versus-assignment-in-r). Let's investigate with an experiment. I've created adapted versions of the functions that perform a simplified version of the element-wise processing but also record the cumulative number of memory address changes at each iteration.
+
+If the address of `y` in any given iteration is not the same as the previous one, the cumulative count of memory addresses that `y` has occupied during execution is increased. Results are then compiled into a data.frame and cumulative counts and returned instead of `y`. So the functions now track the number memory addresses changed during our for loop.
+
+```{r}
+# Create function that appends to result vector through c
+# Collect cumulative number of address changes per iteration
+for_loop_c_addr <- function(x, count_addr = TRUE) {
+    y <- NULL
+    y_addr <- address(y)
+    cum_address_n <- 0
+    cum_address_n_v <- numeric(length(x))
+
+    for (i in seq_along(x)) {
+        y <- c(y, sqrt(x[i]))
+            if (address(y) != y_addr) {
+                cum_address_n <- cum_address_n + 1
+                y_addr <- address(y)
+            }
+
+        cum_address_n_v[i] <- cum_address_n
+    }
+    data.frame(i = seq_along(cum_address_n_v),
+               cum_address_n = cum_address_n_v,
+               mode = "c")
+}
+
+# Create function that appends to result vector through assignment.
+# Collect cumulative number of address changes per iteration
+for_loop_assign_addr <- function(x) {
+    y <- NULL
+    y_addr <- address(y)
+    cum_address_n <- 0
+    cum_address_n_v <- numeric(length(x))
+
+    for (i in seq_along(x)) {
+
+        y[i] <- sqrt(x[i])
+            if (address(y) != y_addr) {
+                cum_address_n <- cum_address_n + 1
+                y_addr <- address(y)
+            }
+        cum_address_n_v[i] <- cum_address_n
+    }
+    data.frame(i = seq_along(cum_address_n_v),
+               cum_address_n = cum_address_n_v,
+               mode = "assign")
+}
+
+## Execute function, compile results and plot
+c_df <- for_loop_c_addr(x)
+assign_df <- for_loop_assign_addr(x)
+
+```
+
+We can now explore our results by are plotting the cumulative count of address changes against `i`.
+
+Let's have a look at what happens during sub-assignment:
+
+```{r}
+assign_df |>
+    ggplot(aes(x = i, y = cum_address_n, colour = mode)) +
+    geom_line() +
+    ylab("Cumulative count of address changes")
+```
+
+We see that, although address changes throughout our for loop as a result of memory requests to accommodate the growing vectors, this does not occur at every iteration, in fact it happens a total of `r max(assign_df$cum_address_n)` times. In between these events, `y` is being grown **in-place** without needing to change address.
+
+This occurs because, since version 3.4.0, **R will allocate a bit of extra memory for atomic vectors when requesting additional memory, so that 'growing' such vectors via sub-assignment may not require a reallocation if some spare capacity is still available**, and indeed that's what we see in our experiment.
+
+Let's know plot it against our results for the `c()` approach:
+
+```{r}
+rbind(c_df, assign_df) |>
+    ggplot(aes(x = i, y = cum_address_n, colour = mode)) +
+    geom_line() +
+    ylab("Cumulative count of address changes")
+```
+
+When using `c(),` R must first allocate space for the new `y` created by the output of `c()` and then copy the inputs to `c()` (i.e. previous `y` and the additional value being appended) object to its new memory location. This results in a change of address at every iteration. Because requests for additional memory are costly, using `c()` to grow a results vector is so much slower and memory inefficient.
+
+The same is true for functions like [`c()`](https://rdrr.io/r/base/c.html), [`append()`](https://rdrr.io/r/base/append.html), [`cbind()`](https://rdrr.io/r/base/cbind.html), [`rbind()`](https://rdrr.io/r/base/cbind.html), or `paste()` so avoid using them in a for loop at all costs.
+
+### Pre-allocating data structures
+
+The best way to improve the performance of our algorithm is to pre allocate a results vector of the required size and then assign our results to elements that already exist. This allows for R to allocate the required amount for `y` once and then modify it in place without creating copies at every iteration.
+
+Below I create two functions that do just that. The first one, `for_loop_preallocate_NA()` creates a vector of `NA`s the same length as `x` whereas the second function `for_loop_preallocate_num()` creates a numeric vector.
+
+```{r}
+for_loop_preallocate_NA <- function(x) {
+    y <- rep(NA, times = length(x))
+    
         for (i in seq_along(x)) {
             if (x[i] < 10) {
                 y[i] <- 0
@@ -148,6 +194,57 @@ cond_sqrt_fl <- function(x) {
         y
 }
 
+for_loop_preallocate_num <- function(x) {
+    y <- numeric(length = length(x))
+    
+        for (i in seq_along(x)) {
+            if (x[i] < 10) {
+                y[i] <- 0
+            } else {
+                y[i] <- sqrt(x[i])
+            }
+        }
+        y
+}
+
+
+```
+
+Let's see what happens to our benchmarks when we pre-allocate the results vector and let's now look at it in relative terms by using `mark()` with argument `relative = TRUE`
+
+```{r}
+bench::mark(
+    for_loop_c(x),
+    for_loop_assign(x),
+    for_loop_preallocate_NA(x),
+    for_loop_preallocate_num(x),
+    relative = TRUE
+)
+```
+
+We can see a huge improvement in performance if we pre-allocate `y` compared to using `c()` and this is also reflected in the huge drop in memory allocation for the operation.
+
+We also see a very minor speed up and smaller memory foot print by preallocating the appropriate type of vector. This is because in `for_loop_preallocate_num()` R doesn't have to coerce `y` to the appropriate numeric in the first iteration as it does in `for_loop_preallocate_NA()`, an operation that requires making a copy of the vector.
+
+Another interesting outcome of our benchmarking experiments though is that, since R 3.4.0, **growing vectors through sub-assignment can be a reasonable approach if there is no way to know what size object to pre-allocate.**
+
+## Vectorise as much as possible
+
+Another popular mantra with respect to efficient programming in R to ***"Vectorise as much as possible"*****.** While it's indeed another golden rule, it can be a misunderstood concept as I've often heard it translated to *"Avoid loops, use the apply family instead"* which, as you will see, is not actually quite accurate, at least not in many situations.
+
+Let's for now play along with that interpretation and explore performance of creating custom function `cond_sqrt_i()` that processes single values and then using some `apply` and `purrr` functions (the tidyverse's answer to the apply family) to apply the function to each element of our vector in one go.
+
+I've wrapped two implementations from each family of functions for ease and fairness of comparison to our for loop approaches:
+
+-   `lapply_unlist_fun()` uses `lapply` and `unlist` to return a vector of values.
+
+-   `sapply_fun()` uses `sapply` which returns a vector.
+
+-   `purrr_map_fun` uses the `map` function from the `purrr` package and `unlist` to return a vector.
+
+-   `purrr_map_dbl_fun` uses the `map_dbl` function fro the `purrr` package that returns a double vector by default.
+
+```{r}
 cond_sqrt_i <- function(x) {
     if (x < 10) {
         return(0)
@@ -156,29 +253,77 @@ cond_sqrt_i <- function(x) {
     }
 }
 
-bench::mark(
-    for_loop = cond_sqrt_fl(x),
-    lapply = unlist(lapply(x, cond_sqrt_i)), 
-    sapply = sapply(x, cond_sqrt_i),
-    map_dbl = purrr::map_dbl(x, cond_sqrt_i)
-)
+
+lapply_unlist_fun <- function(x) {
+    unlist(lapply(x, cond_sqrt_i))
+}
+
+sapply_fun <- function(x) {
+    sapply(x, cond_sqrt_i)
+}
+
+purrr_map_fun <- function(x) {
+    unlist(purrr::map(x, cond_sqrt_i))
+}
+
+purrr_map_dbl_fun <- function(x) {
+    purrr::map_dbl(x, cond_sqrt_i)
+}
 ```
 
-Vectorising your code is not just about avoiding for loops, although that's often a step. Vectorising is about taking a whole-object approach to a problem, thinking about vectors, not scalars. There are two key attributes of a vectorised function:
-
--   It makes many problems simpler. Instead of having to think about the components of a vector, you only think about entire vectors.
-
--   The loops in a vectorised function are written in C instead of R. Loops in C are much faster because they have much less overhead.
+Let's go ahead and add these approaches to our benchmarks. I use the `dplyr` function arrange at the bottom to order the results of our benchmarks by ascending values in median.
 
 ```{r}
+
 bench::mark(
-    for_loop = cond_sqrt_fl(x),
-    lapply = unlist(lapply(x, cond_sqrt_i)), 
-    sapply = sapply(x, cond_sqrt_i),
-    map_dbl = purrr::map_dbl(x, cond_sqrt_i),
-    ifelse = ifelse(x < 10, 0, sqrt(x))
-)
+    for_loop_c(x),
+    for_loop_assign(x),
+    for_loop_preallocate_NA(x),
+    for_loop_preallocate_num(x),
+    lapply_unlist_fun(x),
+    sapply_fun(x),
+    purrr_map_fun(x),
+    purrr_map_dbl_fun(x),
+    relative = TRUE
+) %>%
+    arrange(median)
 ```
+
+Perhaps the results of this contrived test were surprising, perhaps not. What is clear though is that **vectorising your code is not just about avoiding for loops**, although that's often a step.
+
+Yes, **vectorised code is more compact and concise**, which our latest implementations indeed are. But in the `*apply` and `purrr` approaches we tried above, we are not embracing the true concept of vectorisation because we are still having to call `if` on every element of `x` and `sqrt` on *many* of the element of `x`. This is pretty much what our original for loop which preallocates the results vector is doing, without the overhead of calling an `*apply`/`purrr` function as well.
+
+Vectorising is **about taking a whole-object approach to a problem**, thinking about vectors, not individual elements of a vector. And to achieve this, we must harness the power of the fact that **many many functions in R are themselves vectorised** and can take whole vectors as inputs, not just single values, operate on them efficiently and return vectors with a single function call.
+
+Here's a short list of examples of vectorised operators and functions in R.
+
+-   Logical operators: `>`, `<`, `==`, `!=` etc
+
+-   Arithmetic operators: `+`, `-`, `/`, `*` etc.
+
+-   Replacement and indexing operators: `[[<-`, `[<-` , `[[`, `[`
+
+-   Mathematical functions: `log()`, `log10()`, `exp()`, and, fortunately for our example **`sqrt()`**!
+
+Under the hood, vectorised functions also implement for loops, but the are performed by C code instead of R code, making them much faster.
+
+Given this, let's try two more approaches embracing the vectorised nature of (many) R functions:
+
+First, let's write a function that uses the vectorised `ifelse()` function. The function takes a logical vector as it's first argument `tests`, here created by the comparative statement `x < 10` and returns the result of any expression in the second argument `yes` where elements of `test` are `TRUE` and the result of any expression in the third argument `no` where elements of `test` are `FALSE`.
+
+```{r}
+ifelse_fun <- function(x) {
+    ifelse(x < 10, 0, sqrt(x))
+}
+```
+
+Let's finally try one last approach making use of both vectorisation and a mathematical trick. We know that the square root of 0 is also zero. With that in mind, we can process `x` in two vectorised steps, one to convert all values in `x` \< 10 to 0 and then use a single call to `sqrt()` on the whole vector to get the square root (which will only change the value of non 0 elements).
+
+::: callout-tip
+**Bonus Tip**
+
+Sometimes the most effective way to optimise an algorithm or operation is to things carefully about the underlying maths and attempt to optimise through mathematical tricks.
+:::
 
 ```{r}
 cond_sqrt_vctr <- function(x) {
@@ -187,58 +332,44 @@ cond_sqrt_vctr <- function(x) {
 }
 ```
 
-```{r}
-bench::mark(
-    for_loop = cond_sqrt_fl(x),
-    lapply = unlist(lapply(x, cond_sqrt_i)), 
-    sapply = sapply(x, cond_sqrt_i),
-    map_dbl = purrr::map_dbl(x, cond_sqrt_i),
-    ifelse = ifelse(x < 10, 0, sqrt(x)),
-    for_loop_vct = cond_sqrt_vctr(x)
-)
-```
+Let's do a final benchmark comparing all the approaches we've tried:
 
 ```{r}
 bench::mark(
-    rep(sqrt(x), length.out = length(x)),
-    sqrt(x)
-)
+    for_loop_c(x),
+    for_loop_assign(x),
+    for_loop_preallocate_NA(x),
+    for_loop_preallocate_num(x),
+    lapply_unlist_fun(x),
+    sapply_fun(x),
+    purrr_map_fun(x),
+    purrr_map_dbl_fun(x),
+    ifelse_fun(x),
+    cond_sqrt_vctr(x),
+    relative = TRUE
+) %>%
+    arrange(median)
 ```
 
-### Use floating point instead of double
+Here we can see that the clear winner in terms of speed, function `cond_sqrt_vctr()` which harnesses the power of vectorisation most effectively. It's faster that `ifelse` because, although `ifelse` is vectorised, if we look at the source code we see that a big chunk of the body is taken up on performing checks. It also wraps execution of the `yes` and `no` expressions in `rep()` to deal with situations where the expressions themselves cannot be vectorised which adds an additional function call.
 
-```{r}
-x_fl <- fl(x)
+::: callout-important
+#### Take aways:
 
-bench::mark(
-    grow_res = {
-        y <- NULL
-        for (i in seq_along(x)) {
-            y <- c(y, sqrt(x[i]))
-        }
-        y
-    },
-    pre_all_NA = {
-        y <- rep(NA, times = length(x))
-        for (i in seq_along(x)) {
-            y[i] <- sqrt(x[i])
-        }
-        y
-    },
-    pre_all_dat_type = {
-        y <- numeric(length = length(x))
-        for (i in seq_along(x)) {
-            y[i] <- sqrt(x[i])
-        }
-        y
-    }
-)
+-   Avoid growing data structures using functions like `c()`, `rbind()`, `cbind()`, `append()`, `paste()` etc at all costs.
 
-```
+-   For loops are not always inefficient!
 
-```{r}
+-   Pre-allocate memory for results data structures. If that's not possible, growing vectors through sub-assignment can be a reasonable option.
 
-```
+-   Vectorisation is not about replacing for loops with apply functions. It's about working with entire vectors with a single function call.
+:::
+
+::: callout-note
+Vectorised operators work on vectors and derivatives like matrices and arrays. **They do not however work on lists or more complex objects**.
+
+The `apply` and `purrr` families are designed to operate on lists and are therefore an important part of R programming. Ultimately though all data structures in R boil down to some sort of vector. So it's to keep in that in mind and write code that can operate efficiently on vectors, even if that is then going to be applied to a bunch of vectors held in a list or other more complicated S3 or S4 class object.
+:::
 
 ## Use functions & operators implemented in C as much as possible
 
@@ -297,33 +428,212 @@ Here's an interactive version you can use to search for functions by name to che
 DT::datatable(pryr::names_c())
 ```
 
+The above discussion relates to base R functions that call C. Many packages also include and call C or even Fortran functions of their own. This can be identified by calls to `.C()`, `.Call()` or `.External()` (or `.Fortran()` for the Fortran interface. In addition, package `Rcpp` has made writing function in C++ and incorporating them into R package comparatively much simpler. So checking [`Rcpp`'s reverse dependencies](https://cran.r-project.org/web/packages/Rcpp/index.html) can also point to packages including underlying C++ whihc will most likely be much more performant.
+
 ## Return early
 
-## Streamline checks
+Often, the ability of a function to return a meaningful result depends on the inputs and the environment. If some of those preconditions are not met, the function returns some signal value (e.g. `NULL`, `NA`) or an error code or throws an exception.
 
-## Memoise functions
+**Return early** is the way of writing functions or methods so that the **expected positive result** is returned at the end of the function and the rest of the code terminates the execution (by returning or throwing an exception) when conditions are not met.
+
+It is most often advocated as a way of avoiding long, nested and convoluted `if` & `else` statements but, can also improve efficiency if unnecessary computations can be avoided all together.
+
+Consider the following example function. It takes three inputs, `x`, `y` & `z`, and each input needs to undergo some coumputationally costly processing (represented here by the `Sys.sleep()` calls) before the processed inputs can be retuned:
+
+```{r}
+fun_no_early_exit <- function(x, y, z) {
+
+    # Expensive processing done to input x
+    Sys.sleep(1)
+    
+    # Expensive processing done to input y
+    Sys.sleep(1)
+  
+    # Expensive processing done to input y
+    Sys.sleep(1)
+    
+    # Aggregation performed on processed inputs
+    sum(x, y, z)
+}
+
+```
+
+```{r}
+fun_no_early_exit(1, 2, 3)
+```
+
+However, the function requires that none of the inputs are `NA` to return a meaningful value. If any of the values are `NA`, it is propagated through the processing and the final aggregation returns `NA`. It does mean that processing on all inputs still gets carried out unnecessarily.
+
+```{r}
+fun_no_early_exit(1, 2, NA)
+```
+
+So let's write another function that checks inputs at the top of the function. If any are `NA`, it returns `NA` straight away. Otherwise, computation proceeds.
+
+```{r}
+fun_early_exit <- function(x, y, z) {
+    # Check that no inputs are `NA`
+  if (any(is.na(c(x, y, z)))) {
+      return(NA_real_)
+  }
+    # Expensive processing done to input x
+    Sys.sleep(1)
+
+    # Expensive processing done to input y
+    Sys.sleep(1)
+
+    # Expensive processing done to input y
+    Sys.sleep(1)
+    
+    # Aggregation performed on processed inputs
+    sum(x, y, z)
+}
+```
+
+Let's first benchmark the two functions using valid inputs:
+
+```{r}
+bench::mark(
+    fun_no_early_exit(1, 2, 3),
+    fun_early_exit(1, 2, 3)
+)
+```
+
+Let's now check using an invalid input:
+
+```{r}
+bench::mark(
+    fun_no_early_exit(1, 2, NA),
+    fun_early_exit(1, 2, NA)
+)
+```
+
+The function that returns early is much more efficient as it avoids all the costly but ultimately pointless computation on both valid and invalid inputs. The difference in performance is proportionate to the execution time of the computations that can be skipped.
+
+Having said that, we could even move the checks to outside the function, thus saving on the function call all together.
+
+```{r}
+x <- 1
+y <- 2
+z <- NA
+
+bench::mark(
+    check_before = {
+        if (any(is.na(c(x, y, z)))) {
+            res <- NA_real_
+        } else {
+            res <- fun_no_early_exit(1, 2, NA)
+            }
+        },
+    check_in_fun = {
+        res <- fun_early_exit(1, 2, NA)
+        }
+)
+```
+
+This is a very contrived example and the performance difference puts it in the range of not just micro- but nano-optimisation. The point is that the earlier you can establish the validity (or in our case the invalidity) of inputs you are working with, the more you can save on unnecessary computation.
+
+::: callout-important
+While not evident in this example, checks themselves do add to execution times, dependant on their complexity. So, when performance is an issue, checks need to be well considered and deployed in a targeted manner. For example, If you are writing a package with an exported function the might call deep stacks of internal, non user-facing functions, it's costly to be checking the inputs in every level of the call stack. Instead, it's better to be doing as many runtime checks as possible at the top of the stack, checking the inputs to exported functions, and **use your testing suite under various conditions to ensure that the top level checks are enough to propagate valid inputs to the internal functions.**
+:::
+
+## Use memoisation
+
+Memoisation is an optimisation technique that can make code execution more efficient and hence faster. It involves storing the computational results of an operation, e.g. a function call, in cache, and retrieving that same information from the cache the next time the function is called with the same arguments instead of re-computing it.
+
+The package `memoise` allows use to apply memoisation to functions in R which can lead to significant speed ups on code that results in calling a given function multiple times with the same arguments.
+
+Let's have a look at an example that demonstrates the usefulness of memoisation.
+
+The following function, taken from the `memoise` package documentation, calculates Fibonacci numbers.
+
+Fibonacci numbers form a sequence, the Fibonacci sequence, in which each number is the sum of the two preceding ones.
+
+The sequence below represents the first 12 numbers in the Fibonacci sequence and `144` represents the 12th Fibonacci number
+
+    1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144
 
 ```{r}
 fib <- function(n) {
   if (n < 2) {
     return(n)
   } else {
-    return(fib(n-1) + fib(n-2))
+    return(fib(n - 1) + fib(n - 2))
   }
 }
 ```
 
-```{r}
-fib(30)
+So function `fib()` takes an argument `n` and returns the $n^{th}$ by recursively calculating the sum of the two preceding Fibonacci numbers.
 
-fibR(30)
+```{r}
+fib(1)
+fib(12)
+fib(30)
 ```
+
+It thus effectively generates a full Fibonacci sequence up to the $n^{th}$ Fibonacci number every time it executes and calculates the value of the same number twice `n - 1` times.
+
+This recursiveness means the functions gets progressively slower with as `n` increases.
+
+```{r}
+bench::press(
+    n = c(10, 20, 30),
+    bench::mark(fib(n), check = FALSE)
+)
+```
+
+Now let's create a memoised version of the function. To be able to compare them side by side, we will first create another version of `fib()`, `fib_mem()` and then use function `memoise::memoise()` to to memoise it. *(Note that because the function is recursive, we need to change the function name being called within the function itself as well).*
+
+Once memoised, the function will cache the results of executions each time it's called with new argument values in an in memory cache but look up the results of calls with arguments it's already executed.
+
+```{r}
+fib_mem <- function(n) {
+  if (n < 2) {
+    return(n)
+  } else {
+    return(fib_mem(n - 1) + fib_mem(n - 2))
+  }
+}
+fib_mem <- memoise::memoise(fib_mem)
+```
+
+In the case of our `fib_mem()` function, because the function definition is recursive, the intermediate results can be looked up rather than recalculated at each level of recursion. And when the top level `fib_mem()` is called with the same `n,` it simply retrieves it from the cache rather than re-computing it.
+
+So let's see how the two functions perform. We'll call `fib()` once, then call `fib_mem()` twice with the same arguments to see what happens each time.
+
+```{r}
+system.time(fib(30))
+system.time(fib_mem(30))
+system.time(fib_mem(30))
+```
+
+It's clear that memoisation has dramatically improved performance compared to the original function. More over, execution is near 0 the next time the function is re-run as nothing is re-computed.
+
+*Note as well that we did not use `bench::mark()` to test our execution times because it involves repeatedly executing. It therefore makes it hard to demonstrate the difference in execution time between the first time the function is called and subsequent calls.*
+
+#### When to use memoisation
+
+-   When a function is likely to be called multiple times with the same arguments.
+
+-   When the output of the function to be cached is relatively small in size.
+
+-   When making queries to external resources, such as network APIs and databases.
+
+#### When to be cautious about or avoid memoisation
+
+-   When the output of the function to be cached is so large that it might start making computations memory bound.
+
+-   When the function is rarely called using the same inputs.
+
+For more details on memoising and various options for caching, consult the [`memoise` package documentation](https://memoise.r-lib.org/).
 
 ## Use latest version of R
 
-Each iteration of R is improving something to gain more speed with less and less memory. It's always useful if you need more speed to switch to Latest version of R and see if you get any speed gains.
+Each iteration of R is improving something to gain more speed with less and less memory. It's always useful if you need more speed to switch to latest version of R and see if you get any speed gains.
 
-For example, **as of R 3.4.0, R attempts to compile functions when they are first ran to byte code**. On subsequent function calls, instead of reinterpreting the body of the function, R executes the saved and compiled byte code. Typically, this results in faster execution times on later function calls.
+We've seen that in **R** **3.5.0**, memory management of growing structures through sub-assignment was improved. In **R 4.0.0**, the way R keeps track of references to objects and therefore of when copies are required was improved.
+
+Another important example is that, **as of R 3.4.0, R attempts to compile functions when they are first ran to byte code**. On subsequent function calls, instead of reinterpreting the body of the function, R executes the saved and compiled byte code. Typically, this results in faster execution times on later function calls.
 
 Before this, if you wanted your functions byte compiled to improve performance, you needed to explicitly byte compile them using function `cmpfun` from package `compiler`.
 
@@ -342,67 +652,20 @@ csum <- function(x) {
  }	
  
 tictoc::tic(msg = "First time function run (byte compiled by default in R >= 3.4.0)") 
-res <- csum(data$V1)	
+res <- csum(x)	
 tictoc::toc() 
 
 tictoc::tic(msg = "Second time function run (already byte compiled)") 
-res <- csum(data$V1)
+res <- csum(x)
 tictoc::toc() 
 
 csum_cmp <- compiler::cmpfun(csum)
 
 tictoc::tic(msg = "Explicit byte compilation does not improve performance") 
-res <- csum_cmp(data$V1)
+res <- csum_cmp(x)
 tictoc::toc() 
 ```
 
-In general if you are using old versions of R or old functions that are deprecated and are no longer recommended by switching to a new version or new methods you will get a speed advantage for sure.
+In general if you are using old versions of R or old functions that are deprecated and are no longer recommended, switching to a new version or new methods will most likely deliver improvements in speed. The best place to track improvements is to consult [CRAN's R NEWS](https://cran.r-project.org/doc/manuals/r-devel/NEWS.html).
 
-```{r}
-tracemem(mtcars)
-
-mtcars[mtcars$wt < 5, ]
-
-
-mtcars %>% 
-    filter(wt < 5) %>% 
-    mutate(l100k = 235.21 / mpg) %>% # liters / 100 km
-    group_by(cyl) %>% 
-    summarise(l100k = mean(l100k))
-
-
-```
-
-```{r}
-mtcars_tbl <- as_tibble(mtcars)
-
-untracemem(mtcars)
-
-tracemem(mtcars_tbl)
-mtcars_tbl %>% 
-    filter(wt < 5) %>% 
-    mutate(l100k = 235.21 / mpg) 
-
-
-
-mtcars_dt <- as.data.table(mtcars)
-tracemem(mtcars_dt)
-mtcars_dt[wt < 5]
-
-
-mtcars_dt[wt < 5][, `:=`(l100k = 235.21/mpg)][, .(l100k = mean(l100k)), 
-    keyby = .(cyl)]
-
-
-
-mtcars_dtp <- lazy_dt(mtcars)
-tracemem(mtcars_dtp)
-mtcars_dtp %>% 
-    filter(wt < 5) %>% 
-    mutate(l100k = 235.21 / mpg) %>% # liters / 100 km
-    group_by(cyl) %>% 
-    summarise(l100k = mean(l100k)) %>%
-    as_tibble()
-
-
-```
+The same goes for many packages, as we will see with the completely overhauled package `dtplyr`.
