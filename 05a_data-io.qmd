@@ -1,0 +1,426 @@
+---
+title: "Efficient Data Input/Output (I/O)"
+---
+
+Before we can work with data within R, we first have to be able to read it in. Conversely, once we've finished processing or analysing our data, we might need to write out final or intermediate results.
+
+Many factors will go into deciding which format and which read & write functions we might choose for our data. For example:
+
+-   File size
+
+-   Portability
+
+-   Interoperability
+
+-   Human readability
+
+In this section we'll a number of the most common file formats for data (primarily tabular) and summarise their characteristics.
+
+We'll also compare and benchmark functions and packages available in R for reading an writing them.
+
+## File formats
+
+### Flat files
+
+Some of the most common file formats we might be working with when dealing with tabular data are flat delimited text files. Such files store two-dimensional arrays of data by separating the values in each row with specific delimiter characters. A couple of well known examples are:
+
+-   Comma-Separated Values files (CSVs): use a comma to separate values.
+
+-   Tab-Separated Values files (TSVs): use a tab to separate values.
+
+They are ubiquitous and human readable but as you will see, they take up quite a lot of disk space (comparatively) and can be slow to read and write when dealing with large files
+
+#### Packages/functions that can read/write delimited text files:
+
+##### Relevant functions
+
+###### Read
+
+-   `read.csv()` / `read.delim()`
+
+-   `readr::read_csv()`
+
+-   `data.table::fread()`
+
+-   `arrow::read_csv_arrow()`
+
+###### Write
+
+-   `write.csv()` / `write.delim()`
+
+-   `readr::write_csv()`
+
+-   `data.table::fwrite()`
+
+-   `arrow::write_csv_arrow()`
+
+### Binary files
+
+If you look at [Wikipedia](https://en.wikipedia.org/wiki/Binary_file) for a definition of Binary files, you get:
+
+> A **binary file** is a [computer file](https://en.wikipedia.org/wiki/Computer_file "Computer file") that is not a [text file](https://en.wikipedia.org/wiki/Text_file "Text file") 😜
+
+You'll also learn that binary files are usually thought of as being a sequence of [bytes](https://en.wikipedia.org/wiki/Byte "Byte"), and that some binary files contain headers, blocks of metadata used by a computer program to interpret the data in the file. Because they are stored in bytes, they are not human readable unless viewed through specialised viewers.
+
+The process of writing out data to a binary format is called binary serialisation and different format can use different serialisation methods.
+
+Let's look at some binary formats you might consider as an R user.
+
+#### `RData/RDS` formats
+
+`.RData` and `.rds` files are binary formats specific to R that can be used to read complete R objects, so not just restricted to tabular data. They can therefore be good options for storing more complicated object like models etc. `.RData` files can store multiple objects while .`rds` are designed to contain a single object. Pertinent characteristics of such files:
+
+-   Can be faster to restore the data to R (but not necessarily as fast to write).
+
+-   Can preserve R specific information encoded in the data (e.g., attributes, variable types, etc).
+
+-   Are R specific so not interoperable outside of R environments.
+
+-   In R 3.6, the default serialisation version used to write `.Rdata` and `.rds` binary files changed from 2 to 3. This means that files serialised with version 3 will not be able to read by others running R \< 3.5.0 which limits interoperability even between R users.
+
+Overall, while good for writing R objects, I would reserve writing such files only for ephemeral intermediate results or for more complex objects, where other formats are not appropriate. Be mindful of the serialisation version you use if you want users running R \< 3.5.0 to be able to read them.
+
+##### Relevant functions
+
+###### Write
+
+-   `save()`: for writing `.RData` files.
+
+-   `saveRDS()`: for writing `.rds` files.
+
+###### Read
+
+-   `load()`: for writing `.RData` files.
+
+-   `readRDS()`: for writing `.rds` files.
+
+#### Apache parquet/arrow:
+
+While different file formats, I've bundled these two together because they are both Apache Foundation data formats. We also use the same R package (`arrow`) to read & write them.
+
+-   [**Apache Parquet**](https://parquet.apache.org/) is an open source, column-oriented data file format designed for efficient data storage and retrieval. It provides efficient data compression and encoding schemes with enhanced performance to handle complex data in bulk.
+
+-   [**Apache Arrow**](https://arrow.apache.org/docs/format/Columnar.html#format-columnar) defines a language-independent columnar memory format for flat and hierarchical data, organized for efficient analytic operations on modern hardware like CPUs and GPUs.
+
+Parquet is a storage format designed for maximum space efficiency, whereas Arrow is an in-memory format intended for operation by vectorized computational kernels.
+
+The formats, as well as the `arrow` R package to interact with them, are part of the Apache Arrow software development platform for building high performance applications that process and transport large data sets.
+
+::: callout-note
+*You may have noticed the files I shared in `data/` as part of the course materials were all parquet files. That's because the compression of parquet files meant I could write a 10,000,000 table of data to a \~67 MB file (compared to over 1GB in csv format!) and allowed me to share it through GitHub (and you to download it in a more acceptable time frame!*
+:::
+
+##### Relevant functions
+
+###### Write
+
+-   `arrow::write_parquet()`: for writing Apache parquet files.
+
+-   `arrow::write_feather():` for writing arrow IPC format files (arrow represent version 2 of feather files, hence the confusing name of the function).
+
+###### Read
+
+-   `arrow::read_parquet()`: for reading Apache parquet files.
+
+-   `arrow::read_feather():` for reading arrow IPC format files.
+
+#### `fst`
+
+The [*fst* package](https://github.com/fstpackage/fst) for R is based on a number of C++ libraries and provides a fast, easy and flexible way to serialize data frames into the `fst` binary format. With access speeds of multiple GB/s, *fst* is specifically designed to unlock the potential of high speed solid state disks that can be found in most modern computers.
+
+The *fst* file format provides full random access to stored datasets allowing retrieval of subsets of both columns and rows from a file. Files are also compressed.
+
+##### Relevant functions
+
+###### Write
+
+-   `fst::write.fst()`: for writing `fst` files.
+
+###### Read
+
+-   `fst::read.fst()`: for reading `fst` files.
+
+#### `qs`
+
+Package [`qs`](https://github.com/traversc/qs) provides an interface for quickly saving and reading objects to and from disk. The goal of this package is to provide a lightning-fast and complete replacement for the `saveRDS` and `readRDS` functions in R.
+
+`saveRDS` and `readRDS` are the standard for serialization of R data, but these functions are not optimized for speed. On the other hand, `fst` is extremely fast, but only works on `data.frame`\'s and certain column types.
+
+`qs` is both extremely fast and general: it can serialize any R object like `saveRDS` and is just as fast and sometimes faster than `fst`.
+
+###### Write
+
+-   `qs::qsave()`: for serialising R objects to `qs` files.
+
+###### Read
+
+-   `qs::qload()`: for loading `qs` files.
+
+# Benchmarks
+
+Now that we've discussed a bunch of relevant file formats and the packages used to read and write them, let's go ahead and test out the comparative performance of reading and writing them, as well as the file sizes of different formats.
+
+## Writing data
+
+Let's start by comparing write efficiency.
+
+Before we start, we'll need some data to write. So let's load one of the parquet files from the course materials. Let's go for the file with 1,000,000 rows. If you want to speed up the testing you can use the file with 100,000 rows by changing the value of `nrow`.
+
+```{r}
+n_rows <- 1000000L
+data <- arrow::read_parquet(here::here("data", paste0("synthpop_", n_rows, ".parquet")))
+```
+
+Let's also load `dplyr` for the pipe and other helpers:
+
+```{r}
+#| output: false
+library(dplyr)
+```
+
+Let's now create a directory to write our data to:
+
+```{r}
+out_dir <- here::here("data", "write")
+fs::dir_create(out_dir)
+```
+
+To compare each file format and function combination (where appropriate), I've written a function that uses the vale of the `format` argument and the `switch()` function to deploy different write function/format combination for writing out the data.
+
+```{r}
+write_dataset <- function(data, 
+                          format = c("csv", "csv_readr", "csv_dt", "csv_arrow",
+                                     "parquet", "arrow", "rdata", "rds", "fst", "qs"),
+                          out_dir, 
+                          file_name = paste0("synthpop_", n_rows, "_")) {
+    
+    
+    switch (format,
+            ## FLAT FILES ###
+            # write cvs using base
+            csv = write.csv(data, 
+                            file = fs::path(out_dir, 
+                                            paste0(file_name, format), 
+                                            ext = "csv"),
+                            row.names = FALSE),
+            # write csv using readr
+            csv_readr = readr::write_csv(data, 
+                                         file = fs::path(
+                                             out_dir, 
+                                             paste0(file_name, format), 
+                                             ext = "csv")),
+            # write csv using data.table
+            csv_dt = data.table::fwrite(data, 
+                                        file = fs::path(
+                                            out_dir, 
+                                            paste0(file_name, format), 
+                                            ext = "csv")),
+            # write csv using arrow
+            csv_arrow = arrow::write_csv_arrow(data, 
+                                               file = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "csv")),
+            ## BINARY FILES ###
+            # write parquet using arrow
+            parquet = arrow::write_parquet(data, sink = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "parquet")),
+            # write arrow IPC using arrow
+            arrow = arrow::write_feather(data, sink = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "arrow")),
+            # write RData using base
+            rdata = save(data, file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "RData"),
+                         version = 2),
+            # write rds using base
+            rds = saveRDS(data, file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "rds"),
+                          version = 2),
+            # write fst using fst
+            fst = fst::write_fst(data, path = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "fst")),
+            # write qs using qs
+            qs = qs::qsave(data, file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "qs"))
+            
+            
+    )
+}
+```
+
+I've also write a function to process the `bench::mark()` output, removing unnecessary information, arranging the results in descending order of median and printing the result as a `gt()` table.
+
+```{r}
+print_bm <- function(benchmark) {
+    benchmark[, c("expression", "min", "result", "memory", "time", "gc")] <- NULL
+    benchmark %>%
+        arrange(median) %>%
+        gt::gt()
+}
+```
+
+We're now ready to run our benchmarks. I've set them up as a `bench::press()` so we can run the same function every time but vary the `format` argument for each test:
+
+```{r}
+#| message: false
+#| warning: false
+bench::press(
+    format = c("csv", "csv_readr", "csv_dt", "csv_arrow",
+               "parquet", "arrow", "rdata", "rds", "fst", "qs"),
+    {
+        bench::mark(write_dataset(data, format = format, out_dir = out_dir))
+    }
+) %>%
+    print_bm()
+```
+
+We see that:
+
+-    the fastest write format by quite some margin is the arrow format using `arrow::write_feather()`.
+
+-   All `arrow` package are actually quite efficient, all featuring in the top 5 for speed, regardless of format.
+
+-   For `csv` formats however, there is a clear winner, `data.table()`.
+
+-   Both `qs` and `fst` are, as advertised, quite fast and `qs` in particular should definitely be considered when needing to store more complex R objects.
+
+-   Base functions `write.csv()` , `save()` and `saveRDS` are often orders of magnitude slower.
+
+### Size on disk
+
+Let's also check how much space each file format takes up on disk:
+
+```{r}
+tibble::tibble(file = basename(fs::dir_ls(out_dir)),
+               size = file.size(fs::dir_ls(out_dir))) |>
+    arrange(size) |>
+    mutate(size = gdata::humanReadable(size,
+                                       standard="SI",
+                                       digits=1)) |>
+    gt::gt()
+```
+
+It's clear that binary formats take up a lot less space on disk that csv text files. At the extremes, parquet files take up over 17 times less space that a csv file written out with `write.csv()` or `arrow::write_csv_arrow()`.
+
+## Reading data
+
+Let's now use the files we created to test how efficient different formats and functions are in reading in.
+
+Just like I did before with `write_dataset()`, I've written a function to read the appropriate file using the appropriate function according to the value of the `format` argument:
+
+```{r}
+read_dataset <- function(data, format = c("csv", "csv_readr", "csv_dt", "csv_arrow",
+                                           "parquet", "arrow", "rdata", "rds", "fst", "qs"),
+                          out_dir,
+                          file_name = paste0("synthpop_", n_rows, "_")) {
+    
+    
+    switch (format,
+            ## FLAT FILES ###
+            # read cvs using base
+            csv = read.csv(file = fs::path(out_dir, 
+                                            paste0(file_name, format), 
+                                            ext = "csv")),
+            # read cvs using readr
+            csv_readr = readr::read_csv(file = fs::path(
+                                             out_dir, 
+                                             paste0(file_name, format), 
+                                             ext = "csv")),
+            # read cvs using data.table
+            csv_dt = data.table::fread(file = fs::path(
+                                            out_dir, 
+                                            paste0(file_name, format), 
+                                            ext = "csv")),
+            # read cvs using arrow
+            csv_arrow = arrow::read_csv_arrow(file = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "csv")),
+            ## BINARY FILES ###
+            # read parquet using arrow
+            parquet = arrow::read_parquet(file = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "parquet")),
+            # read arrow using arrow
+            arrow = arrow::read_feather(file = fs::path(
+                                                   out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "arrow")),
+            # read RData using base
+            rdata = load(file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "RData")),
+            # read rds using base
+            rds = readRDS(file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "rds")),
+            fst = fst::read_fst(path = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "fst")),
+            qs = qs::qload(file = fs::path(out_dir, 
+                                                   paste0(file_name, format), 
+                                                   ext = "qs"))
+            
+            
+    )
+}
+```
+
+And again, I've set up our benchmarks as a `bench::press()` so we can run the same function every time but vary the `format` argument for each test:
+
+Let's see how fast our format/function combos are at reading!
+
+```{r}
+#| message: false
+#| warning: false
+bench::press(
+    format = c("csv", "csv_readr", "csv_dt", "csv_arrow",
+            "parquet", "arrow", "rdata", "rds", "fst", "qs"),
+    {
+    bench::mark(
+        read_dataset(data, format = format, out_dir = out_dir),
+        relative = FALSE)
+    }
+) %>%
+    print_bm()
+```
+
+Results of our experiments show that:
+
+-   The arrow format using `arrow::read_feather()` is again the fastest.
+
+-   Again all `arrow` functions are the fastest for reading, regardless of format, occupying the top 3.
+
+-   `data.table::fread()` is again very competitive for reading CSVs.
+
+-   `qs` also is highly performant, and a good function to know given it can be used for more complex objects
+
+-   base functions for reading files, whether binary or CSV are again the slowest by quite some margin.
+
+-   It should be noted that both `readr::read_csv()` and `read.csv()` can be made much faster by pre-specifying the data type for each column when reading.
+
+## 
+
+::: callout-important
+## Take Aways
+
+-   The `arrow` package offers some of the fastest functions for writing both flat (e.g. CSV) and binary files like `parquet` and `arrow`.
+
+-   The `arrow` format is especially fast to read and write.
+
+-   Functions from the `data.table` package are also solid contenders for reading and writing CSV files.
+
+-   Functions in package `qs` are also quite performant, especially given they can read and write more complex R objects.
+
+-   Binary files are the most disk space efficient, particularly the `parquet` file format.
+:::
+
