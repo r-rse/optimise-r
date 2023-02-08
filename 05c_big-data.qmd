@@ -37,15 +37,15 @@ As such we can build up our queries using a connection to a database and only co
 
 Let's start our experimentation by creating a simple SQLite database with a single table.
 
-The data we will use is contained in `data/synthpop_10000000.csv` and represents characteristics of 10,000,000 individuals from a synthetic population.
+The data we will use is contained in `data/synthpop_10000000.parquet` and represents characteristics of 10,000,000 individuals from a synthetic population.
 
-I know this section is about data too big for memory and this is not an approach you can use for data truly larger than memory). But because I want to benchmark against in memory data and can fit it into memory on my machine, I will actually load it into memory and write it directly to the database. However, I also show a way to populate it in batches if you find the file is overloading your memory. You can also choose to use one of the smaller synthpop csvs (e.g `data/synthpop_1000000.csv` which contains 1,000,000 rows).
+I know this section is about data too big for memory and this is not an approach you can use for data truly larger than memory). But because I want to benchmark against in memory data and can fit it into memory on my machine, I will actually load it into memory and write it directly to the database. However, I also show a way to populate it in batches if you find the file is overloading your memory. You can also choose to use one of the smaller synthpop parquet files (e.g `data/synthpop_1000000.parquet` which contains 1,000,000 rows).
 
 So let's load our data and have a look at it:
 
 ```{r}
-data <- readr::read_csv("data/synthpop_10000000.csv")
-data
+data <- arrow::read_parquet("data/synthpop_10000000.parquet")
+head(data)
 ```
 
 This is quite a large dataframe.
@@ -104,11 +104,13 @@ dbListFields(con, "synthpop")
 
 ### Chunked method to populate the database
 
-This involves using `readr::read_csv_chunked` to populate a database in batches detailed in the [following blogpost](https://www.michaelc-m.com/manual_posts/2022-01-27-big-CSV-SQL.html) by Michael Culshaw-Maurer.
+If the data is too big to load into memory and then write to a database, an option is to populate it in chunks. This involves using `readr::read_csv_chunked` to populate a database in batches detailed in the [following blogpost](https://www.michaelc-m.com/manual_posts/2022-01-27-big-CSV-SQL.html) by Michael Culshaw-Maurer.
+
+Here's some example code of how we could populate our database from the 1,000,000 row csv file we created in the Data Input/Output section:
 
 ```{r}
 #| eval: false
-readr::read_csv_chunked("data/synthpop_10000000.csv", 
+readr::read_csv_chunked("data/write/synthpop_1000000.csv", 
                         callback = function(chunk, dummy){
                             dbWriteTable(con, "synthpop", chunk, append = T)
                         }, 
@@ -330,7 +332,7 @@ Indexes are a way to improve the performance of your read queries, particularly 
 
 They work similar to how indexes in the back of a book do. They contain the ordered values of the column you create them on along with information about the location of the rows containing each value in the original table.
 
-So just like you might use an index to find a recipe instead of flicking through an entire recipe book, database indexes allow you to look up the values in columns and the location of the rows containing them in your original table without scanning the full table. A well crafted index can produce impressive query speedups!
+So just like you might use an index to find a recipe instead of flicking through an entire recipe book, database indexes allow you to look up the values in columns and the location of the rows containing them in your original table without scanning the full table. A well crafted index can produce impressive query speed ups!
 
 This does come at a cost. They take up space within your database, increasing it's overall size, and they also slow down updating any tables containing indexes as the indexes must also be updated. Crafting indexes is also a bit of an art, as creating an index that speeds up a given query might actually slow another one down!
 
@@ -660,10 +662,10 @@ It **also provides functions for opening connections to files as well as directo
 
 ### Accessing single files as arrow tables
 
-We can read in a single large csv using `arrow::read_csv_arrow` but instead of reading it in as a data.frame, we can use `as_data_frame = FALSE` to open it as an arrow table. Because of how Arrow allocates memory, arrow tables are much more memory efficient representations of tabular data that could mean data that won't fit into memory as an
+We can read in a single large csv, arrow or parquet file using the appropriate `arrow` function but instead of reading it in as a data.frame, we can use `as_data_frame = FALSE` to open it as an arrow table. Because of how Arrow allocates memory, arrow tables are much more memory efficient representations of tabular data that could mean data that won't fit into memory as an
 
 ```{r}
-arrow_tbl <- arrow::read_csv_arrow("data/synthpop_10000000.csv", 
+arrow_tbl <- arrow::read_parquet("data/synthpop_10000000.parquet", 
                       as_data_frame = FALSE)
 
 
@@ -707,7 +709,7 @@ This does not load the data into memory. Instead `open_dataset()` scans the cont
 Let's open a single file as a dataset first. To do so we supply the path to the files as well as the format it's stored in.
 
 ```{r}
-arrow_dt_csv <- arrow::open_dataset("data/synthpop_10000000.csv", format = "csv")
+arrow_dt_csv <- arrow::open_dataset("data/synthpop_10000000.parquet", format = "parquet")
 
 
 bench::mark(
