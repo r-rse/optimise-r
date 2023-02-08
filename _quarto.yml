@@ -38,8 +38,9 @@ website:
           - 04_efficient-code.qmd
       - section: "Working with Data"
         contents:
-          - 05a_in-mem-data.qmd
-          - 05b_big-data.qmd
+          - 05a_data-io.qmd
+          - 05b_in-mem-data.qmd
+          - 05c_big-data.qmd
       - section: "Parallelisation"
         contents:
           - 06_parallel.qmd
