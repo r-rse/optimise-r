@@ -1,0 +1,9 @@
+---
+title: "Efficiency Beyond R"
+---
+
+## Multithreaded Math Libraries
+
+## Byte compiling R code
+
+## Writing C code

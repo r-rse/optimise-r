@@ -126,3 +126,17 @@ Code interpreted line by line during run time.
 -   \*\*Examples: R\*\*, Ruby, Python, and JavaScript.
 :::
 :::
+
+## R performance
+
+-   R offers some excellent features: dynamic typing, lazy functional evaluation and object-orientation
+
+-   Side effect: operations are undertaken in single-threaded mode, i.e. sequentially
+
+::: notes
+R as a language and environment is reasonably well established and understood.
+A combination of dynamic typing, lazy functional evaluation and object-orientation (in several flavors)
+makes for a somewhat unique combination as discussed by Morandat et al. (2012). One side-effect
+of this design is that core operations are undertaken in single-threaded mode, or, in other words, sequentially. Sequential computing consists of operations executed in strict sequence, and following a
+predetermined ordering. It may be the simplest unit of computation (beyond a single instru
+:::

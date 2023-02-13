@@ -10,10 +10,9 @@ In this course you will learn about:
 
 -   Benchmarking and profiling code
 
--   Best practice for writing performant code
+-   Best practice for writing performant code in R
 
--   Best practice in interacting with large data
+-   Best practice in working efficiently with data
 
 -   Parallelising workflows
 
--   Linking to optimised Math libraries

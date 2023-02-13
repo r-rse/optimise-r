@@ -134,311 +134,317 @@ cols <- 150
 data <- as.data.frame(x = matrix(rnorm(rows * cols, mean = 5), ncol = cols))
 data <- cbind(id = paste0("g", seq_len(rows)), data)
 
-
-data1 <- data   # Store in another variable for this run
-
 # Get column means
-means <- apply(data1[, names(data1) != "id"], 2, mean)
+means <- apply(data[, names(data) != "id"], 2, mean)
 
 # Subtract mean from each column
 for (i in seq_along(means)) {
-    data1[, names(data1) != "id"][, i] <- data1[, names(data1) != "id"][, i] - means[i]
+    data[, names(data) != "id"][, i] <- data[, names(data) != "id"][, i] - means[i]
 }
-
 ```
 
-Looking at it, we might think back to the age old R advice to "avoid loops! Vectorise". So to improve performance of our code we might start by working on the for loop.
+Looking at it, we might think back to the age old R advice to "avoid loops". So to improve performance of our code we might start by working on the for loop.
 
-Let's use benchmark to test a few options and compare it to the original approach:
+Let's use `microbenchmark` to test the execution times of alternative approaches and compare them to the original approach:
 
--   To vectorise, we might consider the `mapply` function, given we want to vectorise across more than one objects (`means` and the data)
+-   Give we we want to iterate across more than one objects (`means` and the columns in our data) might consider the `mapply` function. We then reassign the result back to the appropriate columns in our data.frame.
+-   We could also try `purrr`s `map2_dfc` which takes two inputs and column binds the results into a data.frame. We can again reassign the result back to the appropriate columns in our data.frame.
+
+To test out our approaches we might want to make a smaller version of our data to work with. Let's create a smaller data frame with 40,000 rows and 50 columns and re-calculate our `means` vector:
 
 ```{r}
+rows <- 40000
+cols <- 50
+data <- as.data.frame(x = matrix(rnorm(rows * cols, mean = 5), ncol = cols))
+data <- cbind(id = paste0("g", seq_len(rows)), data)
 
-microbenchmark::microbenchmark(
-    for_loop = {
-        data_ctr <- data
-        for (i in seq_along(means)) {
-            data_ctr[, names(data_ctr) != "id"][, i] <- 
-                data_ctr[, names(data_ctr) != "id"][, i] - means[i]
-        }
-    }, 
-    mapply = {
-        data_ctr <- data
-        data_ctr[, names(data_ctr) != "id"] <- mapply(
-            function(x, y) x - y,
-            data_ctr[, names(data_ctr) != "id"], 
-            means)
-    },
-    lrg_vector = {
-        data_ctr <- data
-        data_ctr[, names(data_ctr) != "id"] <- 
-            data_ctr[, names(data_ctr) != "id"] - rep(means, each = rows)
-    },
-      map2_dfc = {
-        data_ctr <-  cbind(data["id"],
-                        purrr::map2_dfc(
-                            data[, names(data) != "id"], 
-                            means, 
-                            ~.x - .y))
-    },
-    times = 5
-)
-
-
+means <- apply(data[, names(data) != "id"], 2, mean)
 ```
+
+Now let's wrap our original for loop and our two test approaches in a benchmark.
+
+We can wrap each expression in `{}` and pass it as a named argument for easier review of our benchmark results.
+
+Let's only run 50 iterations instead of the default 100 through argument `times`.
+
+Let's also include some `setup` code so that a new `data_bnch` object is created before each benchmark expression so that we don't overwrite the `data` object in the global environment.
 
 ```{r}
 microbenchmark::microbenchmark(
     for_loop = {
-        data_ctr <- data
         for (i in seq_along(means)) {
-            data_ctr[, names(data_ctr) != "id"][, i] <- 
-                data_ctr[, names(data_ctr) != "id"][, i] - means[i]
+            data_bnch[, names(data_bnch) != "id"][, i] <- 
+                data_bnch[, names(data_bnch) != "id"][, i] - means[i]
         }
     }, 
     mapply = {
-        data_ctr <- data
-        data_ctr[, names(data_ctr) != "id"] <- mapply(
-            function(x, y) x - y,
-            data_ctr[, names(data_ctr) != "id"], 
+        data_bnch[, names(data_bnch) != "id"] <- mapply(
+            FUN = function(x, y) x - y,
+            data_bnch[, names(data_bnch) != "id"], 
             means)
-    },
-    lrg_vector = {
-        data_ctr <- data
-        data_ctr[, names(data_ctr) != "id"] <- 
-            data_ctr[, names(data_ctr) != "id"] - rep(means, each = times)
     },
       map2_dfc = {
-        data_ctr <-  cbind(data["id"],
-                        purrr::map2_dfc(
-                            data[, names(data) != "id"], 
+        data_bnch[, names(data_bnch) != "id"] <- purrr::map2_dfc(
+                            data_bnch[, names(data_bnch) != "id"], 
                             means, 
-                            ~.x - .y))
+                            ~.x - .y)
     },
-    times = 5,
-    check = "equivalent"
+    times = 50,
+    setup = {data_bnch <- data}
 )
-
 ```
 
-```{r}
-mb <- microbenchmark::microbenchmark(
-    for_loop = {
-        data_ctr <- data
-        for (i in seq_along(means)) {
-            data_ctr[, names(data_ctr) != "id"][, i] <- 
-                data_ctr[, names(data_ctr) != "id"][, i] - means[i]
-        }
-        data_ctr
-    }, 
-    mapply = {
-        data_ctr <- data
-        data_ctr[, names(data_ctr) != "id"] <- mapply(
-            function(x, y) x - y,
-            data_ctr[, names(data_ctr) != "id"], 
-            means)
-        data_ctr
-    },
-    lrg_vector = {
-        data_ctr <- data
-        data_ctr[, names(data_ctr) != "id"] <- 
-            data_ctr[, names(data_ctr) != "id"] - rep(means, each = times)
-        data_ctr
-    },
-      map2_dfc = {
-        data_ctr <-  cbind(data["id"],
-                        purrr::map2_dfc(
-                            data[, names(data) != "id"], 
-                            means, 
-                            ~.x - .y))
-        data_ctr
-    },
-    times = 5,
-    check = "equivalent"
-)
+The results of our benchmark return one row per expression tested.
 
-mb
+-   `expr` contains the name of the expression.
 
-autoplot(mb)
-```
+-   `min`, `lq`, `mean`, `median`, `uq` and `max` are summary statistics of the execution times across all iterations.
 
-```{r}
+-   `neval` shows the numbers of iterations
 
-        data1 <- data
-        for (i in seq_along(means)) {
-            data1[, names(data1) != "id"][, i] <- 
-                data1[, names(data1) != "id"][, i] - means[i]
-        }
-        data1
+So far, `purrr::map2_dfc()` is looking like the best option.
 
- 
-        data2 <- data
-        data2[, names(data2) != "id"] <- mapply(
-            function(x, y) x - y,
-            data2[, names(data2) != "id"], 
-            means)
+But are we sure we are getting the same results form each approach?
 
-
-        data3 <- data
-        data3[, names(data3) != "id"] <- 
-            data3[, names(data3) != "id"] - rep(means, each = times)
-
-   
-        data4 <-  dplyr::mutate_if(data, is.numeric, 
-                                   ~scale(.x, 
-                                          center = TRUE,
-                                          scale = FALSE)) 
- 
-        data5 <-  cbind(data["id"],
-                        purrr::map2_dfc(
-                            data[, names(data) != "id"], 
-                            means, 
-                            ~.x - .y))
-        
-        
-        
-        ,
-  
-        
-```
-
-```{r}
-waldo::compare(data1, data2)
-waldo::compare(data1, data3)
-waldo::compare(data3, data4)
-waldo::compare(data1, data5)
-
-
-all.equal(data1, data2)
-all.equal(data1, data3)
-all.equal(data3, data4)
-all.equal(data1, data5)
-
-
-```
+To ensure this we can re-run our benchmarks using the `check` argument. A value of `"equal"` will compare all values output by the benchmark using `all.equal().` For the comparison to work, we need the last expression of the computation to output the same object. As this differs in the for loop from the two others, we include a call to print the final object `data_bnch` for comparison in each expression.
 
 ```{r}
 microbenchmark::microbenchmark(
-
+    for_loop = {
+        for (i in seq_along(means)) {
+            data_bnch[, names(data_bnch) != "id"][, i] <- 
+                data_bnch[, names(data_bnch) != "id"][, i] - means[i]
+        }
+        data_bnch
+    }, 
     mapply = {
-        data1 <- data
-        data1[, names(data1) != "id"] <- mapply(
+        data_bnch[, names(data_bnch) != "id"] <- mapply(
             function(x, y) x - y,
-            data1[, names(data1) != "id"], 
+            data_bnch[, names(data_bnch) != "id"], 
             means)
-        data1
+        data_bnch
     },
-    lrg_vector = {
-        data2 <- data
-        data2[, names(data2) != "id"] <- 
-            data2[, names(data2) != "id"] - rep(means, each = times)
-        data2
+      map2_dfc = {
+        data_bnch[names(data_bnch) != "id"] <- purrr::map2_dfc(
+                            data_bnch[, names(data_bnch) != "id"], 
+                            means, 
+                            ~.x - .y)
+        data_bnch
     },
-    times = 5,
-    check = "equivalent"
+    times = 50,
+    setup = {data_bnch <- data},
+    check = "equal"
 )
-
 ```
 
-Let's say we wanted to try and impor
+Excellent! We can now be confident that our tests are retuning the same result.
+
+Finally, if you like to compare things visually, the output of our benchmark can be provided as an input to the `autoplot.microbenchmark` method to produce a graph of microbenchmark timings.
+
+```{r}
+#| message: false
+library(ggplot2)
+library(dplyr)
+microbenchmark::microbenchmark(
+    for_loop = {
+        for (i in seq_along(means)) {
+            data_bnch[, names(data_bnch) != "id"][, i] <- 
+                data_bnch[, names(data_bnch) != "id"][, i] - means[i]
+        }
+        data_bnch
+    }, 
+    mapply = {
+        data_bnch[, names(data_bnch) != "id"] <- mapply(
+            function(x, y) x - y,
+            data_bnch[, names(data_bnch) != "id"], 
+            means)
+        data_bnch
+    },
+      map2_dfc = {
+          data_bnch[names(data_bnch) != "id"] <- purrr::map2_dfc(
+                            data_bnch[, names(data_bnch) != "id"], 
+                            means, 
+                            ~.x - .y)
+        data_bnch
+    },
+    times = 50,
+    setup = {data_bnch <- data},
+    check = "equal"
+) %>%
+autoplot()
+```
 
 ### `bench` 📦
+
+`bench` is similar to `microbenchmark`. However it offers some additional features which means I generally prefer it.
+
+The main function equivalent to `microbenchmark()` is `mark()`.
+
+#### `mark()`
+
+**PROs**
+
+-   The main pro in my view is that it also tracks memory allocations for each expression.
+
+-   It also tracks the number and type of R garbage collections per expression iteration.
+
+-   It verifies equality of expression results by default, to avoid accidentally benchmarking inequivalent code.
+
+-   It allows you to execute code in separate environments (so that objects in global environment are not modified).
+
+**Some cons to consider:**
+
+-   it doesn't have a `setup` option.
+
+-   the output object, while much more informative than that of `microbenchmark` can be quite bloated itself.
+
+So let's go ahead and run our tests using `bench::mark()`.
+
+Because there is no setup option, we need to create `data_bnch` at the start of each expression. We can also use argument `env = new.env()` to perform all our computation in a separate environment.
+
+Because `mark()` checks for equality by default, we use the version of our expressions that print the resulting `data_bnch` at the end for comparison.
 
 ```{r}
 bench::mark(
     for_loop = {
-        data_ctr <- data
+        data_bnch <- data
         for (i in seq_along(means)) {
-            data_ctr[, names(data_ctr) != "id"][, i] <- 
-                data_ctr[, names(data_ctr) != "id"][, i] - means[i]
+            data_bnch[, names(data_bnch) != "id"][, i] <- 
+                data_bnch[, names(data_bnch) != "id"][, i] - means[i]
         }
-        data_ctr
+        data_bnch
     }, 
     mapply = {
-        data_ctr <- data
-        data_ctr[, names(data_ctr) != "id"] <- mapply(
+        data_bnch <- data
+        data_bnch[, names(data_bnch) != "id"] <- mapply(
             function(x, y) x - y,
-            data_ctr[, names(data_ctr) != "id"], 
+            data_bnch[, names(data_bnch) != "id"], 
             means)
-        data_ctr
-    },
-    lrg_vector = {
-        data_ctr <- data
-        data_ctr[, names(data_ctr) != "id"] <- 
-            data_ctr[, names(data_ctr) != "id"] - rep(means, each = times)
-        data_ctr
+        data_bnch
     },
       map2_dfc = {
-        data_ctr <-  cbind(data["id"],
-                        purrr::map2_dfc(
-                            data[, names(data) != "id"], 
+          data_bnch <- data
+          data_bnch[names(data_bnch) != "id"] <- purrr::map2_dfc(
+                            data_bnch[, names(data_bnch) != "id"], 
                             means, 
-                            ~.x - .y))
-        data_ctr
+                            ~.x - .y)
+        data_bnch
     },
-    iterations = 5
+    env = new.env()
 )
 ```
 
-```{r}
-data_ctr <- data
-        data_ctr[, names(data_ctr) != "id"] <- mapply(
-            function(x, y) x - y,
-            data_ctr[, names(data_ctr) != "id"], 
-            means)
-        data_ctr
-```
+Let's have a look at the output in detail:
+
+-   `expression` - `bench_expr` The deparsed expression that was evaluated (or its name if one was provided).
+
+-   `min` - The minimum execution time.
+
+-   `median` - The sample median of execution time.
+
+-   `itr/sec` - The estimated number of executions performed per second.
+
+-   `mem_alloc` - Total amount of memory allocated by R while running the expression.
+
+-   `gc/sec` - The number of garbage collections per second.
+
+-   `n_itr` - Total number of iterations after filtering garbage collections (if `filter_gc == TRUE`).
+
+-   `n_gc` - Total number of garbage collections performed over all iterations.
+
+-   `total_time` - The total time to perform the benchmarks.
+
+-   `result` - `list` A list column of the object(s) returned by the evaluated expression(s).
+
+-   `memory` - `list` A list column with results from [`Rprofmem()`](http://127.0.0.1:30837/help/library/bench/help/Rprofmem).
+
+-   `time` - `list` A list column of vectors for each evaluated expression.
+
+-   `gc` - `list` A list column with tibbles containing the level of garbage collection (0-2, columns) for each iteration (rows).
+
+I find the addition of the `mem_alloc` particularly useful. Just look at the difference between `mapply` and the other two approaches in term of memory usage!
+
+As you can see, there's a lot more information in the `bench::mark()` output. Note as well there are a number of list columns at the which include results of the evaluated expressions, results of `Rprofmem()` and a list of garbage collection events. This can be quite useful to dig into.
+
+However, if this object is assigned to a variable or you try to save it, it could take up A LOT of space depending on the size of the results and number of internal calls. So I recommend getting rid of such columns if you want to save benchmarks.
+
+#### `press()`
+
+Another cool feature of the `bench` package is bench::pressing() using the `press()` function. `press()` can be used to run [`mark()`](http://127.0.0.1:30837/help/library/bench/help/mark) across a grid of parameters and then *press* the results together.
+
+We set the parameters we want to test across as named arguments and a grid of all possible combinations is automatically created.
+
+The code to setup the benchmark is passed as a single unnamed expression before calling the bench::mark() code we want to run with the grid of parameters.
+
+Let's have a look at how this works.
+
+Say we want to test the performance of our three approaches on data.frames of different sizes varying both rows and columns.
+
+We can specify two parameters in bench::press() as named arguments `rows` and `columns` and assigns vectors of the values we want press() to create a testing grid from.
+
+The next curly braces `{}` contain our setup code which create data.frames of different sizes and the benchmark.
 
 ```{r}
 bp <- bench::press(
     rows = c(1000, 10000, 400000),
-    cols = c(15, 75, 150),
+    cols = c(10, 50, 100),
     {
         {
+            # Bench press setup code:
+            # create data.frames of different sizes using parameters 
+            # rows & columns
             set.seed(1)
-            data <- as.data.frame(x = matrix(rnorm(rows * cols, mean = 5), ncol = cols))
+            data <- as.data.frame(x = matrix(
+                rnorm(rows * cols, mean = 5), 
+                ncol = cols))
             data <- cbind(id = paste0("g", seq_len(rows)), data)
             means <- apply(data[, names(data) != "id"], 2, mean)
         }
         bench::mark(
             for_loop = {
-                data_ctr <- data
+                data_bnch <- data
                 for (i in seq_along(means)) {
-                    data_ctr[, names(data_ctr) != "id"][, i] <- 
-                        data_ctr[, names(data_ctr) != "id"][, i] - means[i]
+                    data_bnch[, names(data_bnch) != "id"][, i] <- 
+                        data_bnch[, names(data_bnch) != "id"][, i] - means[i]
                 }
-                data_ctr
+                data_bnch
             }, 
             mapply = {
-                data_ctr <- data
-                data_ctr[, names(data_ctr) != "id"] <- mapply(
+                data_bnch <- data
+                data_bnch[, names(data_bnch) != "id"] <- mapply(
                     function(x, y) x - y,
-                    data_ctr[, names(data_ctr) != "id"], 
+                    data_bnch[, names(data_bnch) != "id"], 
                     means)
-                data_ctr
-            },
-            lrg_vector = {
-                data_ctr <- data
-                data_ctr[, names(data_ctr) != "id"] <- 
-                    data_ctr[, names(data_ctr) != "id"] - rep(means, each = rows)
-                data_ctr
+                data_bnch
             },
             map2_dfc = {
-                data_ctr <-  cbind(data["id"],
-                                   purrr::map2_dfc(
-                                       data[, names(data) != "id"], 
-                                       means, 
-                                       ~.x - .y))
-                data_ctr
+                data_bnch <- data
+                data_bnch[names(data_bnch) != "id"] <- purrr::map2_dfc(
+                    data_bnch[, names(data_bnch) != "id"], 
+                    means, 
+                    ~.x - .y)
+                data_bnch
             },
-            iterations = 5,
+            env = new.env(),
             time_unit = "us"
         )
     }
 )
+bp
 ```
 
+Now when we look at our benchmark we see we get results for each approach and also for each `row` x `column` combination.
+
+Let's plot the results again using `autoplot` to get a better overview of our results
+
 ```{r}
-ggplot2::autoplot(bp)
+autoplot(bp)
 ```
+
+What thus show is that:
+
+-    for the smallest data.frame sizes, `mapply` is actually quite performant!
+
+-   for loops are also fastest when the number of columns is small regardless of number of rows.
+
+-   `map2_dfc` becomes the better performer as number of columns increases.

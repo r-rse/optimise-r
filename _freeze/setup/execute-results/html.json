@@ -1,0 +1,16 @@
+{
+  "hash": "a8bc3e7cbfb8f1e4c069f0d4a01aa346",
+  "result": {
+    "markdown": "---\ntitle: \"setup\"\n---\n\n\n## Install a recent R version\n\nYou can download the latest version of R from <https://www.r-project.org/>. Ideally you should have an R version \\> 4.0.0. Otherwise you might experience issues with using/installing some of the packages needed.\n\n## Install RStudio\n\nInstall Rstudio desktop from <https://posit.co/download/rstudio-desktop/>\n\n## Install R dependencies\n\nUse the following code to install the packages we will be working with in one go.\n\n\n::: {.cell}\n\n```{.r .cell-code}\npkgs <- c(\n    \"arrow\", \n    \"beeswarm\",\n    \"bench\", \n    \"benchmarkme\", \n    \"biglm\", \n    \"data.table\", \n    \"DBI\", \n    \"dbplyr\", \n    \"doFuture\",\n    \"dplyr\", \n    \"dtplyr\", \n    \"duckdb\", \n    \"float\", \n    \"fs\", \n    \"fst\", \n    \"furrr\",\n    \"future\",\n    \"future.apply\",\n    \"gt\", \n    \"ggplot2\",\n    \"lobstr\", \n    \"microbenchmark\", \n    \"pryr\", \n    \"purrr\",\n    \"qs\", \n    \"readr\", \n    \"RSQLite\",\n    \"skimr\",\n    \"tibble\",\n    \"tictoc\", \n    \"usethis\", \n    \"vroom\"\n)\n\ninstall.packages(pkgs)\n```\n:::\n\n\nIf you are having problems installing the `arrow` package, have a look at the [package installation instructions](https://arrow.apache.org/docs/r/#installation).\n\n### Download course materials\n\nThe course materials can be found at <https://github.com/r-rse/optimise-r-materials>.\n\nTo download the materials you can use `usethis` function `use_course()`. This will download a `zip` file of the repository and unzip it for you. If you do not supply a `destdir` path, as below, it will ask you whether you want it to download it to your `Desktop` by default. If you prefer it to be downloaded to another destination, just supply a path to `destdir`.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nusethis::use_course(\"r-rse/optimise-r-materials\")\n```\n:::\n",
+    "supporting": [
+      "setup_files"
+    ],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

@@ -1,0 +1,9 @@
+---
+title: "Programmer efficiency"
+---
+
+## Use version control
+
+## Use packages
+
+## Have a test suite!

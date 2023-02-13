@@ -62,4 +62,4 @@ format:
 editor: visual
 
 execute:
-  freeze: true
+  freeze: auto
