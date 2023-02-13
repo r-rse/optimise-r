@@ -1,0 +1,51 @@
+---
+title: "Efficiency Beyond R"
+---
+
+## Optimised Linear Algebra Libraries
+
+BLAS (Basic Linear Algebra Subprograms) is a set of low-level routines for performing common linear algebra operations, such as vector-vector operations, matrix-vector operations, and matrix-matrix operations.
+
+R uses BLAS (Basic Linear Algebra Subprograms) and LAPACK (Linear Algebra PACKage) libraries for linear algebra operations. Because the default libraries have not been fully optimized, you could see large increases in speed, for code that is dependent on linear algebra computations, by switching to a different BLAS library.
+
+### Optimised BLAS libraries
+
+Optimized BLAS libraries are faster than unoptimized ones for several reasons, including:
+
+1.  **C implementation:** Optimized BLAS libraries are typically written in C. The use of C allows for efficient implementation of the basic linear algebra operations that are performed by BLAS libraries.
+
+2.  **Vectorisation:** Optimized BLAS libraries often use Vectorisation.
+
+3.  **Parallel computation:** Many optimized BLAS libraries are designed to take advantage of parallel computation. This allows for faster computation of the linear algebra operations, as the work is divided among multiple processors.
+
+4.  **Advanced algorithms:** Optimized BLAS libraries often implement advanced algorithms for linear algebra operations that are designed to reduce the number of operations required or to take advantage of specific hardware features, such as specialized vector processing units.
+
+Examples of optimised BLAS libraries include **OpenBLAS**, **Intel MKL** (Math Kernel Library), and **Atlas** (Automatically Tuned Linear Algebra Software)
+
+To use an optimized BLAS library in R, you typically need to install the library and configure R to use it. The exact steps for doing this will depend on the specific BLAS library you want to use and the operating system you are using.
+
+#### Further Reading
+
+-   [R Installation and Administration: A.3 Linear algebra](https://cran.r-project.org/doc/manuals/r-release/R-admin.html#Linear-algebra)
+
+-   [Improving R Perfomance by installing optimized BLAS/LAPACK libraries](https://csantill.github.io/RPerformanceWBLAS/)
+
+-   [Faster BLAS in R](https://brettklamer.com/diversions/statistical/faster-blas-in-r/)\
+
+### OpenMP
+
+OpenMP is a popular technology for adding parallelism to C, C++, and Fortran programs, and some BLAS libraries choose to implement parallelism using OpenMP to take advantage of multiple cores on a single machine.
+
+Many R packages can take advantage of OpenMP to perform parallel computation, including `data.table` and `fst` which we've looked at in this course.
+
+It is important to note that the specific steps for installing an R package with support for OpenMP can vary depending on the package, the operating system, and the version of R, so it is always a good idea to consult the package documentation or ask the package maintainer for more detailed information.
+
+## Writing faster code in another language
+
+Sometimes the only way to increase speed is to rewrite key bottleneck code R code in another language.
+
+R has interfaces to C and Fortran but also to C++, Java, Python and JavaScript through packages **Rcpp**, **rJava**, **rPython** and recently **V8** respectively**.**
+
+In particular, **Rcpp** has made incorporating C++ code into your R workflow much easier than the traditional C and Fortran interfaces and has seen considerable growth in use in R packages.
+
+This is about as much detail as we'll discuss today but I wanted you to be aware of it as an option. Head to the [`Rcpp` documentation](https://www.rcpp.org/) for further information and examples.

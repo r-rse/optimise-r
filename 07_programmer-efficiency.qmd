@@ -2,8 +2,32 @@
 title: "Programmer efficiency"
 ---
 
+It's important to note that while programmatic efficiency is important, programmer or developer efficiency is just as important, and sometimes these can come into conflict. Computing time is cheap nowadays whereas developer time is expensive so need to consider how changes to optimise your code might affect the time it takes developers to build on, maintain and understand the code base.
+
+## Don't optimise prematurely
+
+We've already mentioned but we'll reiterate it here.
+
+While following the golden rule can help with efficiency, it is more important to ensure you have a working program before you start any optimisations.
+
+You might find that the your program performs well enough for your use cases, the number of computations or size of data you are working with.
+
+You can then start optimising only if necessary. If it's running too slow or if you want to put something into production that users might need more performance from. That's the time to get the profiler our and start addressing bottlenecks.
+
+## Don't change programming styles unless necessary
+
+Equally your team might follow a programming style that might not use the fastest approaches or packages.
+
+You'll need to weigh up whether the benefits you'll gain from speeding up your code against the costs of changing programming styles or learning the syntax of new packages.
+
 ## Use version control
 
-## Use packages
+When experimenting with new approaches to speed your code up, it's important to be able to work on separate copies of the code base, record any changes and be able to revert back to known working states if you end up breaking something. Using a version control system properly is imperative for this.
 
 ## Have a test suite!
+
+I don't recommend starting to make changes to a code base, especially if it's big and complex without a solid testing suite. Without one it's impossible to know if any changes to one part of the code have ended up breaking expected behaviour in another part of the code and can make for a very frustrating optimisation experience!
+
+## Develop some standard benchmarks
+
+Just like a test suite, you can set up scripts that run standard benchmarks on important functions. This allows you to ensure that speeding up one part of the code hasn't ended up making another part slower. It also allows you to monitor performance overall and give users and indication of how fast your program can be expected to run.

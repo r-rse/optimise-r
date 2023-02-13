@@ -1,0 +1,10 @@
+---
+title: "credits"
+---
+
+-   cpu image \<a href="https://www.flaticon.com/free-icons/cpu" title="cpu icons"\>Cpu icons created by Freepik - Flaticon\</a\>
+-   ram \<a href="https://www.flaticon.com/free-icons/ram-memory" title="Ram Memory icons"\>Ram Memory icons created by Freepik - Flaticon\</a\>
+-   hdd \<a href="https://www.flaticon.com/free-icons/hdd" title="hdd icons"\>Hdd icons created by Smashicons - Flaticon\</a\>
+-   transistor \<a href="https://www.flaticon.com/free-icons/transistor" title="transistor icons"\>Transistor icons created by surang - Flaticon\</a\>
+-   network \<a href="https://www.flaticon.com/free-icons/topology" title="topology icons"\>Topology icons created by Konkapp - Flaticon\</a\>
+-   https://www.deviantart.com/findingnull/art/Binary-GIF-871009093

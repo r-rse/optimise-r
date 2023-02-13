@@ -1,5 +1,8 @@
 project:
   type: website
+  render:
+    - "*.qmd"
+    - "02_intro.qmd"
 
 website:
   title: "Optimising workflows in R"
@@ -15,6 +18,8 @@ website:
       - href: index.qmd
         text: Home
       - about.qmd
+      - text: "Setup"
+        href: setup.qmd
   page-footer:
     center:
       - text: "About"
@@ -47,6 +52,10 @@ website:
       - section: "Programmer efficency"
         contents:
           - 07_programmer-efficiency.qmd
+      - section: "Beyond R"
+        contents:
+          - 08_beyond-r.qmd
+
 format:
   html:
     theme:
@@ -63,3 +72,7 @@ editor: visual
 
 execute:
   freeze: auto
+
+plugins:
+  package: "@quarto/netlify-plugin-quarto"
+
